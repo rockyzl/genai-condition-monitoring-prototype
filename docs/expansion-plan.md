@@ -1,9 +1,88 @@
-# Expansion Plan — Explicit Pipeline + Deterministic Agent Layer
+# Expansion Plan v2 — Explicit Pipeline + Autopilot Agent with HITL Decision Gates
 
-> Planned 2026-07-06 by a 5-role team (Architect, Data Scientist, ML Engineer,
-> Data Analyst, Product Analyst) + lead synthesis. **Status: awaiting Lu's
-> approval — no implementation yet.** Scope: ~1.5–2 days on top of the working
-> prototype. All build-spec truthfulness guardrails carry over unchanged.
+> v1 planned 2026-07-06 by a 5-role team (Architect/DS/MLE/DA/PA). **v2 same
+> day**: Lu refined the agent vision — "the agent does ALL the heavy lifting
+> (ingest→model→predict→summarize) automatically and visibly; the human faces
+> only condensed decision points with the strongest signals extracted" — and a
+> 4-role agentic-specialist team (Agentic Architect, HITL Decision-UX,
+> Agent Reliability, Agentic PM) corrected and completed that framing.
+> **Status: awaiting Lu's approval — no implementation yet.** Scope: ~2–2.5
+> days total. All truthfulness guardrails carry over.
+
+## v2 — The agentic upgrade (supersedes v1's agent layer)
+
+**Lu's framing, completed by the specialists.** What he described is a
+**deterministic pipeline supervisor with HITL approval gates** (never "an
+autonomous/LLM agent"): planner-executor over the fixed 10-stage DAG +
+critic/summarizer emitting decision cards + observable execution. The three
+things his framing was missing, now designed in:
+
+1. **Bounded-autonomy contract** (testable): the agent may NEVER mark an
+   engine safe, suppress a high-risk finding, alter thresholds/cap, sign off
+   a report, or pick a champion on a calibration tie. Each becomes a
+   governance check.
+2. **Failure IS a decision point**: gate trips escalate as cards, not silent
+   aborts. Leakage/grounding/safety violations auto-HALT.
+3. **Checkpoint/resume**: provenance hashes are the state; answering a gate
+   resumes from the checkpoint, never from s01. Deterministic: same inputs +
+   seed → byte-identical decisions and trace.
+
+### Two entry modes, one registry
+- **Autopilot（自动巡检）** — flagship: `agent run --all` walks
+  s01→s10 with a per-stage state machine (EXECUTE → VALIDATE gate → pass /
+  RAISE card / HALT), streaming an append-only NDJSON journal
+  (`reports/autopilot_journal.jsonl`) the app renders live. `--autonomy
+  gated|auto|dry-run`, default gated; triage + sign-off cards never auto-pass.
+- **Query（问答）** — v1's rule planner ("diagnose unit 81"), same tools,
+  same trace schema.
+- **Teaching mode（教学模式）** — the existing wizard, renamed and reused as
+  the evidence viewer; decision cards deep-link into it. Top-level segmented
+  toggle, Autopilot is the landing default.
+
+### Decision Inbox（决策收件箱）
+Card anatomy: one-sentence bilingual verdict → ≤3 signals (one is always the
+uncertainty/optimism caveat) → evidence deep-link → safe-default actions →
+consequence preview ("Export = draft work orders only, never commands").
+**Max 5 actionable cards per run**; everything else batches into the digest.
+The five cards for this fleet (real content, bilingual, from HITL-UX):
+🔴 P1 "3 engines need inspection first — 39/57/81 (≤10 cycles)";
+🟠 P2 "15 more high-risk — schedule this cycle"; 🟡 "1 newly escalated —
+unit 24 fell 45→28"; 🟡 "7 engines can't be trusted yet — too little
+history" (default action: Mark as unknown); 🟢 "75 healthy" (collapsed).
+Done-state sentence: "Agent scored 100 engines, flagged 18, prepared evidence
+per unit. **You have 4 decisions.** 75 healthy auto-cleared."
+
+### Watch-it-work view
+Narrative progress lines, not logs ("② Cleaning: dropped 7 flat sensors — 14
+carry wear signal"), detail behind expanders; file-based (journal poll ~1s),
+no websockets. Human actions write `reports/autopilot_inbox/<card_id>.json`;
+the supervisor polls to resume. Crash-safe, replayable.
+
+### Reliability layer (per-stage gates + Section D eval)
+Stage gate table (ingest schema → HALT; leakage canary → HALT; champion
+worse-than-Ridge-floor → HALT, marginal → CARD; degenerate risk distribution
+→ CARD; diagnosis governance violation → HALT; etc.). New eval Section D:
+recommendation→trace-step citation, card-signal reproducible from artifact
+hash, no unrecorded stage skips, gate outcomes logged, two-run determinism,
+no orphan claims. ~9 new tests; suite target ≈40. Gate thresholds live in
+config and are hashed into the trace (anti-silent-weakening meta-test).
+
+### Naming & claims (enforced)
+Safe: "deterministic pipeline agent/supervisor with human-in-the-loop
+decision gates", "automates the analysis; the human owns the decision",
+"step-level execution trace for auditability". Banned: "fully autonomous",
+"autonomous agent", "self-healing", "no human needed", "real-time" (say
+"live step-by-step"), "LLM agent".
+
+### Flagship demo moment (optimize for this one)
+Run autopilot → watch it walk 10 stages live → it hands back a ~4-card
+decision inbox with evidence + citations + recommended actions → approve one
+card → see the grounded report. "The agent did the heavy lifting and can
+prove every claim; you made the decisions."
+
+---
+
+# v1 base plan (pipeline + science + tools — still current except where v2 supersedes)
 
 ## What Lu asked for
 
@@ -117,19 +196,19 @@ logic; the rest are ~20-line wrappers.
 - Metrics single source of truth: `reports/metrics_model.json` +
   `reports/evaluation_summary.md`; README/app/docs quote, never restate.
 
-## Implementation phases (after approval)
+## Implementation phases (v2-revised, after approval)
 
-| Phase | Content | Owner roles |
+| Phase | Content | Effort |
 |---|---|---|
-| A | Pipeline wrappers + config + provenance + manifest + EDA & predict stages | MLE + Architect |
-| B | Model-selection bake-off + selection report + champion contract | DS |
-| C | Agent registry + planner + orchestrator + trace + grounding tests | MLE |
-| D | App: pipeline overview page, fleet EDA, triage table, per-stage captions, metrics-from-JSON fix | DA + app engineer (after the in-flight wizard rework lands) |
-| E | Docs/README/resume-bullets/eval extension (trace governance checks) + final audit refresh | Writer + lead |
-| Stretch | MCP stdio server | MLE |
+| A | Pipeline wrappers + config + provenance + manifest + EDA/predict stages **+ step-event journal writes** | ~0.5d |
+| B | Model-selection bake-off + selection report + champion contract | ~0.3d |
+| C | Agent registry + rule planner + trace → **autopilot supervisor** (state machine, gates, cards, checkpoint/resume) + grounding tests | ~0.5d |
+| D | App: **Autopilot progress page (live journal render) + Decision Inbox** + Teaching-mode rename + fleet EDA + per-stage captions + metrics-from-JSON fix | ~0.6–0.8d (biggest) |
+| E | Docs/README/resume-bullets + eval Section D (trace/condensation governance) + final audit refresh | ~0.3d |
+| Stretch | MCP stdio server (over the same registry) | last |
 
-Note: Phase D depends on the button-wizard rework currently in flight — that
-lands first.
+Total ≈2–2.5 days. The button-wizard rework has landed, so Phase D is
+unblocked once A–C exist.
 
 ## Testing & reproducibility (MLE)
 
@@ -138,16 +217,23 @@ planner plans, trace grounding) → target ≈31, existing 16 untouched.
 Seeds in config; `requirements.lock.txt` pinned; `make demo` = pipeline +
 eval + one agent query; CI-ready but Actions deferred.
 
-## Success criteria (PA — done = all five)
+## Success criteria (v2 — done = all six)
 
-- [ ] One command runs ingestion→prediction reproducibly.
-- [ ] Agent answers "which engines need inspection?" with every claim backed
-      by a trace step citing evidence + KB.
-- [ ] `model_selection.md` compares ≥2 candidates with explicit rationale.
-- [ ] README + manifest explain each stage plainly; first-time reader runs it
-      in <5 min.
-- [ ] Truthfulness audit passes; "deterministic orchestrator" naming enforced;
-      resume bullets updated with produced facts only.
+- [ ] `agent run --all` reproducibly drives all 10 stages, streaming a
+      step-event journal the app renders live.
+- [ ] Run ends in a Decision Inbox: every card carries evidence + KB citation
+      + recommended action; triage and sign-off cards never auto-pass.
+- [ ] **Condensation (flagship): a first-time user reaches the 3-4 key
+      decisions in <2 minutes without opening any chart.**
+- [ ] Every agent recommendation traces to a journal step + evidence/KB
+      citation; grounding + determinism tests pass (~40 total, 16 legacy
+      untouched).
+- [ ] Both entry modes work off one registry: autopilot + query
+      ("diagnose unit 81"); wizard preserved as Teaching mode / evidence
+      viewer.
+- [ ] Truthfulness audit passes; "deterministic pipeline agent + HITL
+      decision gates" naming enforced; `model_selection.md` compares ≥2
+      candidates with explicit rationale.
 
 ## Explicit CUT list
 
