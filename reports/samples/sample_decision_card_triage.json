@@ -1,0 +1,57 @@
+{
+  "id": "high_risk_triage-f1e5ed30",
+  "kind": "high_risk_triage",
+  "priority": "P1",
+  "verdict_en": "3 engines need inspection first — units 81, 34, 35 (predicted RUL ≤10 cycles).",
+  "verdict_zh": "有 3 台发动机需要优先检查——81, 34, 35 号（预测剩余寿命 ≤10 周期）。",
+  "signals": [
+    {
+      "text_en": "Units 81, 34, 35 sit at predicted RUL 6.6 / 7.1 / 9.8 cycles — the 3 closest to end-of-life (≤10 cycles).",
+      "text_zh": "81, 34, 35 号机组预测剩余寿命 6.6 / 7.1 / 9.8 个周期，是最接近报废的 3 台（≤10 周期）。",
+      "artifact": "data/processed/test_predictions.csv",
+      "field": "count:pred_rul<=10.0"
+    },
+    {
+      "text_en": "18 engines are in the high-risk band overall — schedule the rest this cycle after the first inspections.",
+      "text_zh": "整机队共有 18 台落在高风险区间——先查最急的，其余本周期内排上。",
+      "artifact": "data/processed/test_predictions.csv",
+      "field": "count:risk_band=high"
+    },
+    {
+      "text_en": "Point estimates, typically off by about ±18 cycles and widest near end-of-life, where the model tends to read optimistic — use for triage ordering, not exact timing.",
+      "text_zh": "这些都是点估计，误差大约 ±18 个周期，越接近寿命末端越大，而且模型这时往往偏乐观——只用来排优先级，别当作精确的剩余时间。",
+      "artifact": "reports/metrics_model.json",
+      "field": "metrics_vs_uncapped_truth.rmse"
+    }
+  ],
+  "evidence_link": "data/processed/evidence/unit_81.json",
+  "actions": [
+    {
+      "id": "schedule_inspection",
+      "label_en": "Schedule inspection for units 81, 34, 35",
+      "label_zh": "为 81, 34, 35 号机组安排检查",
+      "consequence_en": "Export = draft work orders only, never commands. No maintenance is actuated; a human still approves each work order.",
+      "consequence_zh": "导出的只是工单草稿，绝不是执行指令。不会触发任何维护动作，每张工单仍需人工批准。",
+      "safe_default": true
+    },
+    {
+      "id": "defer",
+      "label_en": "Defer to next cycle",
+      "label_zh": "推迟到下个周期",
+      "consequence_en": "Units stay flagged; no work order is drafted.",
+      "consequence_zh": "机组仍保持标记；不生成任何工单。",
+      "safe_default": false
+    },
+    {
+      "id": "open_evidence",
+      "label_en": "Open evidence for unit 81",
+      "label_zh": "查看 81 号机组的证据",
+      "consequence_en": "Opens the teaching-mode evidence viewer; changes nothing.",
+      "consequence_zh": "打开教学模式的证据查看器；不改变任何状态。",
+      "safe_default": false
+    }
+  ],
+  "raised_at": "2026-07-06T23:46:45.338+00:00",
+  "auto_passable": false,
+  "safe_default_applicable": true
+}

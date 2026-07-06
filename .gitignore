@@ -8,3 +8,9 @@ __pycache__/
 .DS_Store
 models/*.pkl
 models/*.joblib
+# runtime state (regenerated every agent/pipeline run)
+reports/agent_trace_*.json
+reports/autopilot_journal.jsonl
+reports/autopilot_state.json
+reports/pipeline_journal.jsonl
+reports/autopilot_inbox/
