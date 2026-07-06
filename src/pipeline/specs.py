@@ -167,23 +167,29 @@ STAGE_SPECS: dict[str, StageSpec] = {
     ),
     "s06_select": StageSpec(
         name="s06_select",
-        what="Record the champion model. Phase A has a single candidate "
-        "(RandomForest), selected by grouped-CV RMSE with a simplicity tiebreak; "
-        "Phase B adds the Ridge floor and HistGBM challenger.",
+        what="Bake off three candidates — Ridge (floor), RandomForest (incumbent), "
+        "HistGradientBoosting (challenger) — on identical GroupKFold(5)-by-unit "
+        "folds, then record the champion with its rationale.",
         why="Choosing the champion is a governed decision (never the highest score "
-        "alone), so the rationale is written down as an artifact from the start.",
-        inputs=["data/processed/model_meta.json"],
-        outputs=["data/processed/champion.json"],
+        "alone): it must beat the Ridge floor and only swaps off the incumbent on a "
+        "clear win, so the reasoning is written down as an auditable artifact.",
+        inputs=["data/processed/model_meta.json", "data/raw/CMAPSSData/train_FD001.txt"],
+        outputs=["reports/model_selection.md", "reports/model_selection.json",
+                 "data/processed/champion.json"],
         assumptions=[
-            "Phase A: one candidate, so selection is a pass-through that records the "
-            "RandomForest as champion with its metrics.",
-            "The champion swaps behind the prediction interface; evidence/RAG layers "
-            "are unchanged when a challenger later wins.",
+            "All candidates share the same GroupKFold folds; every preprocessing "
+            "step (e.g. Ridge's standardiser) is fit inside the training fold — no "
+            "leakage — and the test set is never touched during selection.",
+            "The champion must beat the Ridge floor or the stage HALTs; the "
+            "RandomForest stays champion unless a challenger is clearly better "
+            "(> margin cycles on BOTH overall and end-of-life RMSE).",
         ],
-        zh_what="记录当选的冠军模型。A 阶段只有随机森林一个候选，按分组交叉验证的"
-        "RMSE 选出、并以简单性做决胜；B 阶段再加 Ridge 下限和 HistGBM 挑战者。",
-        zh_why="选谁当冠军是一个要讲规矩的决定（不是单看谁分高），所以从一开始就"
-        "把选择理由写成一份可查的产物。",
+        zh_what="在完全相同的 GroupKFold(5) 按机组分折上，比三个候选模型——Ridge"
+        "（下限）、随机森林（现任冠军）、HistGradientBoosting（挑战者）——再记录"
+        "当选冠军和理由。",
+        zh_why="选谁当冠军是一个要讲规矩的决定（不是单看谁分高）：它必须先赢过"
+        "Ridge 下限，而且只有在明显更好时才换掉现任，所以把理由写成一份可查、可"
+        "审计的产物。",
     ),
     "s07_predict": StageSpec(
         name="s07_predict",

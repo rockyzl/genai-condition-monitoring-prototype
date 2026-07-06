@@ -17,6 +17,7 @@ import json
 from pathlib import Path
 
 from src.diagnostics import build_evidence as be
+from src.models import model_selection as ms
 from src.models import train_baseline as tb
 from src.pipeline import eda as eda_mod
 from src.pipeline import run_eval_wrap  # local wrapper, see bottom of file
@@ -239,39 +240,63 @@ def s05_model(ctx: PipelineContext) -> StageResult:
     return ctx.run_stage("s05_model", inputs, outputs, params, work)
 
 
-# --- s06 select --------------------------------------------------------------
+# --- s06 select (new logic: three-candidate bake-off) ------------------------
 def s06_select(ctx: PipelineContext) -> StageResult:
     cfg = ctx.cfg
     meta_path = cfg.path("data_processed") / "model_meta.json"
-    inputs = [meta_path]
-    out = cfg.path("data_processed") / "champion.json"
-    params = {"phase": "A", "candidates": ["RandomForestRegressor"]}
+    model_path = cfg.path("models") / "rul_baseline.joblib"
+    fi_path = cfg.path("data_processed") / "feature_importances.csv"
+    # Selection re-cross-validates on the training data, so the raw train file is
+    # a real input (its hash gates the skip decision alongside the RF params).
+    inputs = [meta_path, _raw_file(ctx, "train")]
+
+    champion_path = cfg.path("data_processed") / "champion.json"
+    out_json = cfg.path("reports") / "model_selection.json"
+    out_md = cfg.path("reports") / "model_selection.md"
+    outputs = [out_md, out_json, champion_path]
+    params = {
+        "candidates": [ms.RIDGE, ms.RANDOM_FOREST, ms.HIST_GBM],
+        "n_splits": ms.N_SPLITS,
+        "low_rul_threshold": ms.LOW_RUL_THRESHOLD,
+        "rf_params": cfg.rf_params.sklearn_kwargs(cfg.seed),
+        "champion_margin_rmse": cfg.gate_thresholds.champion_margin_rmse,
+        "ridge_floor_rmse": cfg.gate_thresholds.ridge_floor_rmse,
+    }
 
     def work() -> StageWork:
-        meta = json.loads(meta_path.read_text())
-        champion = {
-            "champion": meta["model"],
-            "candidates": ["RandomForestRegressor"],
-            "selection_basis": "grouped-CV RMSE with a simplicity tiebreak",
-            "rationale": (
-                "Phase A has a single candidate, so selection is a governed "
-                "pass-through recording the RandomForest as champion. Phase B adds "
-                "the Ridge floor and the HistGBM challenger over identical "
-                "GroupKFold folds and can raise a CARD/HALT if the champion only "
-                "marginally beats — or loses to — the Ridge floor."
-            ),
-            "model_params": meta["model_params"],
-            "n_train_rows": meta["n_train_rows"],
-            "source": "data/processed/model_meta.json",
-        }
-        _write_json(out, champion)
-        ctx.journal.stage_progress(
-            "s06_select", f"champion = {champion['champion']} (1 candidate, Phase A)"
+        summary = ms.run_selection(
+            cfg,
+            md_path=out_md,
+            json_path=out_json,
+            champion_path=champion_path,
+            model_path=model_path,
+            fi_path=fi_path,
+            meta_path=meta_path,
         )
-        return StageWork(rows=1, key_metrics={"champion": champion["champion"]},
-                         artifacts={str(out): {"champion": champion["champion"]}})
+        swap_note = " (retrained behind the RF joblib path)" if summary["swapped"] else ""
+        ctx.journal.stage_progress(
+            "s06_select",
+            f"champion = {summary['champion']} over {summary['n_candidates']} "
+            f"candidates; CV-RMSE {summary['cv_rmse_mean']:.2f}±{summary['cv_rmse_std']:.2f}, "
+            f"beats Ridge floor by {summary['floor_gap_cycles']:.2f}{swap_note}",
+        )
+        km = {
+            "champion": summary["champion"],
+            "cv_rmse_mean": summary["cv_rmse_mean"],
+            "low_rul_rmse": summary["low_rul_rmse"],
+            "floor_gap_cycles": summary["floor_gap_cycles"],
+            "swapped": summary["swapped"],
+        }
+        return StageWork(
+            rows=summary["n_candidates"],
+            key_metrics=km,
+            artifacts={
+                str(out_json): {"champion": summary["champion"]},
+                str(champion_path): {"champion": summary["champion"]},
+            },
+        )
 
-    return ctx.run_stage("s06_select", inputs, [out], params, work)
+    return ctx.run_stage("s06_select", inputs, outputs, params, work)
 
 
 # --- s07 predict (split out of training) -------------------------------------

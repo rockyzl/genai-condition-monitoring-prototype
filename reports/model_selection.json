@@ -1,0 +1,97 @@
+{
+  "champion": "RandomForestRegressor",
+  "seed": 42,
+  "protocol": {
+    "cv": "GroupKFold",
+    "n_splits": 5,
+    "group_by": "unit_id",
+    "n_train_rows": 20631,
+    "n_groups": 100,
+    "n_features": 42,
+    "target": "capped RUL (cap=125)",
+    "low_rul_threshold": 50,
+    "identical_folds": true,
+    "fold_signature": "37b9d8bb5226988d"
+  },
+  "criteria": [
+    "grouped-CV RMSE (mean±std)",
+    "end-of-life calibration: low-RUL RMSE + optimistic-error fraction",
+    "simplicity tiebreak"
+  ],
+  "candidates": [
+    {
+      "name": "Ridge",
+      "role": "floor",
+      "complexity_rank": 1,
+      "how_it_works": "Fits one straight-line weight per sensor feature (a linear model).",
+      "explains_itself": "Yes — one signed weight per signal.",
+      "cv_rmse_mean": 21.0061,
+      "cv_rmse_std": 1.3823,
+      "cv_rmse_folds": [
+        22.8253,
+        20.7494,
+        20.9925,
+        18.6539,
+        21.8095
+      ],
+      "low_rul_rmse": 21.2005,
+      "low_rul_optimistic_fraction": 0.7776,
+      "n_low_rul_rows": 5000,
+      "fold_signature": "37b9d8bb5226988d"
+    },
+    {
+      "name": "RandomForestRegressor",
+      "role": "incumbent champion",
+      "complexity_rank": 2,
+      "how_it_works": "Averages 200 decision trees that each vote on remaining life.",
+      "explains_itself": "Yes — ranks which sensors drove the estimate.",
+      "cv_rmse_mean": 18.1989,
+      "cv_rmse_std": 0.5154,
+      "cv_rmse_folds": [
+        18.8841,
+        17.6273,
+        18.7438,
+        17.7742,
+        17.9653
+      ],
+      "low_rul_rmse": 17.5009,
+      "low_rul_optimistic_fraction": 0.7196,
+      "n_low_rul_rows": 5000,
+      "fold_signature": "37b9d8bb5226988d"
+    },
+    {
+      "name": "HistGradientBoostingRegressor",
+      "role": "challenger",
+      "complexity_rank": 3,
+      "how_it_works": "Builds trees in sequence, each correcting the previous one's misses.",
+      "explains_itself": "Indirectly — needs a follow-up permutation test.",
+      "cv_rmse_mean": 18.5923,
+      "cv_rmse_std": 0.61,
+      "cv_rmse_folds": [
+        19.4618,
+        18.0464,
+        19.1216,
+        17.8804,
+        18.4513
+      ],
+      "low_rul_rmse": 17.5143,
+      "low_rul_optimistic_fraction": 0.6602,
+      "n_low_rul_rows": 5000,
+      "fold_signature": "37b9d8bb5226988d"
+    }
+  ],
+  "verdict": {
+    "champion": "RandomForestRegressor",
+    "swapped_from_default": false,
+    "default_champion": "RandomForestRegressor",
+    "beats_floor": true,
+    "floor_rmse": 21.0061,
+    "floor_gap_cycles": 2.8072,
+    "champion_margin_rmse": 1.0,
+    "challenger_cv_gap_cycles": -0.3934,
+    "challenger_lowrul_gap_cycles": -0.0134
+  },
+  "champion_rationale": "Champion: **RandomForestRegressor**. It posts a grouped-CV typical miss of 18.20 ± 0.52 cycles (5 folds, split by engine so no unit is scored on itself), and beats the Ridge floor by 2.81 cycles — the ensemble earns its complexity. The HistGradientBoostingRegressor challenger did NOT clear the clear-win bar (needs >1.0 cycles better than the RandomForest on BOTH criteria; observed gaps: CV-RMSE -0.39, end-of-life RMSE -0.01 — positive means RF is already ahead). Determinism and the unchanged downstream contract outweigh a fractional-cycle change, so the RandomForest stays champion (simplicity tiebreak favours the incumbent). End-of-life calibration (true RUL < 50): the champion's low-RUL RMSE is 17.50 cycles and it guesses too healthy on 72.0% of near-failure rows — the honest, watch-this caveat that the uncertainty note carries downstream.",
+  "halted": false,
+  "error": null
+}

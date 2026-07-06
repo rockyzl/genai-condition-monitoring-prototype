@@ -100,6 +100,31 @@ class Journal:
             seconds=round(float(seconds), 4),
         )
 
+    # --- gate events (Phase C autopilot HITL) ---------------------------------
+    # Additive only: these emit the types reserved in ``GATE_EVENT_TYPES`` so the
+    # autopilot supervisor's decision points stream through the same append-only
+    # writer the app already tails. Existing readers whitelist them today.
+    def gate_raised(
+        self, card_id: str, kind: str, stage: str, payload_summary: dict | None = None
+    ) -> dict:
+        return self._emit(
+            "gate_raised",
+            card_id=card_id,
+            kind=kind,
+            stage=stage,
+            payload_summary=payload_summary or {},
+        )
+
+    def gate_resolved(
+        self, card_id: str, action: str, stage: str | None = None
+    ) -> dict:
+        return self._emit(
+            "gate_resolved", card_id=card_id, action=action, stage=stage
+        )
+
+    def halt(self, stage: str, reason: str, detail: str | None = None) -> dict:
+        return self._emit("halt", stage=stage, reason=reason, detail=detail)
+
 
 def read_events(path: Path | str) -> list[dict]:
     """Read all events from a journal file (skips blank/corrupt lines)."""
