@@ -1,0 +1,88 @@
+{
+  "asset_id": 24,
+  "summary": "Asset 24 at cycle 186: the random_forest_baseline predicts a remaining useful life of about 24.75 cycles, placing this unit in the high-risk band (near end-of-life for this model's convention; prioritize review). This is an advisory estimate; the sections below trace the reading to retrieved guidance and flag its uncertainty.",
+  "supporting_evidence": [
+    "sensor_4: mean 1410.698, std 4.2119, increasing trend over the last 30 cycles.",
+    "sensor_15: mean 8.4543, std 0.0201, increasing trend over the last 30 cycles.",
+    "sensor_11: mean 47.5913, std 0.1036, increasing trend over the last 30 cycles.",
+    "sensor_21: mean 23.2615, std 0.0598, decreasing trend over the last 30 cycles.",
+    "sensor_12: mean 521.584, std 0.3997, decreasing trend over the last 30 cycles.",
+    "sensor_2: mean 642.8197, std 0.3292, increasing trend over the last 30 cycles.",
+    "Top model signals by importance: sensor_4_roll_mean (0.128001), sensor_15_roll_mean (0.107844), sensor_11_roll_mean (0.088613), sensor_21_roll_mean (0.071918), sensor_12_roll_mean (0.062918), sensor_2_roll_mean (0.057829)."
+  ],
+  "possible_failure_modes": [
+    {
+      "failure_mode": "High-Pressure Compressor (HPC) Degradation",
+      "evidence": "HPC degradation is the dominant fault mode in the FD001 subset used by this prototype.",
+      "source_file": "failure_modes.md",
+      "section": "High-Pressure Compressor (HPC) Degradation",
+      "retrieval_score": 0.2095
+    },
+    {
+      "failure_mode": "Bearing Wear",
+      "evidence": "Bearing wear is a mechanical degradation mode.",
+      "source_file": "failure_modes.md",
+      "section": "Bearing Wear",
+      "retrieval_score": 0.1965
+    },
+    {
+      "failure_mode": "Fan and Blade Wear",
+      "evidence": "Fan or blade-path wear reduces airflow efficiency.",
+      "source_file": "failure_modes.md",
+      "section": "Fan and Blade Wear",
+      "retrieval_score": 0.1618
+    }
+  ],
+  "recommended_next_steps": [
+    {
+      "step": "Maintenance Review Checklist",
+      "detail": "A practical, ordered checklist a reviewer follows when a unit is flagged high-risk by the model.",
+      "source_file": "maintenance_review_checklist.md",
+      "section": "Maintenance Review Checklist",
+      "retrieval_score": 0.2522
+    },
+    {
+      "step": "Step 1 \u2014 Verify Data Quality",
+      "detail": "Before trusting any flag, confirm the input is sound.",
+      "source_file": "maintenance_review_checklist.md",
+      "section": "Step 1 \u2014 Verify Data Quality",
+      "retrieval_score": 0.2393
+    },
+    {
+      "step": "Step 4 \u2014 Schedule Inspection",
+      "detail": "If the data is clean and the degradation is corroborated, schedule a physical inspection proportional to the risk band.",
+      "source_file": "maintenance_review_checklist.md",
+      "section": "Step 4 \u2014 Schedule Inspection",
+      "retrieval_score": 0.2049
+    }
+  ],
+  "uncertainty": "This remaining-useful-life value is a single point estimate from a baseline model and carries no calibrated confidence interval. The training RUL target is capped with a piecewise-linear ceiling (commonly 125 cycles), so predictions for healthy early-life units are compressed toward that cap and must not be read as precise cycle counts. Prediction error is largest near end-of-life, exactly where it matters most. Use this output as decision support to prioritize inspection, not as an authoritative time-to-failure. Human review is required.",
+  "citations": [
+    {
+      "source_file": "failure_modes.md",
+      "section": "High-Pressure Compressor (HPC) Degradation"
+    },
+    {
+      "source_file": "failure_modes.md",
+      "section": "Bearing Wear"
+    },
+    {
+      "source_file": "failure_modes.md",
+      "section": "Fan and Blade Wear"
+    },
+    {
+      "source_file": "maintenance_review_checklist.md",
+      "section": "Maintenance Review Checklist"
+    },
+    {
+      "source_file": "maintenance_review_checklist.md",
+      "section": "Step 1 \u2014 Verify Data Quality"
+    },
+    {
+      "source_file": "maintenance_review_checklist.md",
+      "section": "Step 4 \u2014 Schedule Inspection"
+    }
+  ],
+  "human_review_required": true,
+  "safety_note": "Independent R&D prototype built on public NASA C-MAPSS simulation data. It does not make safety-critical decisions, does not command any action, and is not affiliated with any equipment manufacturer. Every output is advisory and must be reviewed by a qualified human before any maintenance action."
+}

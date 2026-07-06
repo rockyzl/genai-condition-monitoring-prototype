@@ -1,0 +1,64 @@
+{
+  "dataset": "FD001",
+  "model": "RandomForestRegressor",
+  "model_params": {
+    "n_estimators": 200,
+    "min_samples_leaf": 3,
+    "max_features": "sqrt",
+    "random_state": 42
+  },
+  "rul_cap": 125,
+  "n_test_units": 100,
+  "n_train_rows": 20631,
+  "n_features": 42,
+  "metrics_vs_capped_truth": {
+    "rmse": 17.1989,
+    "mae": 12.0709,
+    "r2": 0.8158
+  },
+  "metrics_vs_uncapped_truth": {
+    "rmse": 18.1877,
+    "mae": 13.1409,
+    "r2": 0.8084
+  },
+  "risk_band_counts": {
+    "low": 60,
+    "medium": 22,
+    "high": 18
+  },
+  "top_features": [
+    {
+      "feature": "sensor_4_roll_mean",
+      "importance": 0.128001
+    },
+    {
+      "feature": "sensor_15_roll_mean",
+      "importance": 0.107844
+    },
+    {
+      "feature": "sensor_11_roll_mean",
+      "importance": 0.088613
+    },
+    {
+      "feature": "sensor_21_roll_mean",
+      "importance": 0.071918
+    },
+    {
+      "feature": "sensor_12_roll_mean",
+      "importance": 0.062918
+    },
+    {
+      "feature": "sensor_2_roll_mean",
+      "importance": 0.057829
+    },
+    {
+      "feature": "sensor_17_roll_mean",
+      "importance": 0.055453
+    },
+    {
+      "feature": "sensor_7_roll_mean",
+      "importance": 0.05393
+    }
+  ],
+  "notes": "Headline metrics are vs capped truth (cap=125), the target the model was trained on. Uncapped metrics are worse because some test units have true RUL > 125, which a capped model cannot reach by construction. Baseline only; no hyperparameter search, no sequence model."
+}

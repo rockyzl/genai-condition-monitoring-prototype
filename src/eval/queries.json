@@ -1,0 +1,12 @@
+[
+  {"query": "high-pressure compressor degradation sensor signature rising temperature", "expected_source": "failure_modes.md"},
+  {"query": "bearing wear vibration and how it shows in thermodynamic data", "expected_source": "failure_modes.md"},
+  {"query": "ordered checklist steps when a unit is flagged high risk", "expected_source": "maintenance_review_checklist.md"},
+  {"query": "verify data quality frozen or railed sensor values before trusting a flag", "expected_source": "maintenance_review_checklist.md"},
+  {"query": "how to interpret a RUL point estimate as a range not an exact number", "expected_source": "rul_interpretation.md"},
+  {"query": "RUL cap piecewise linear target ceiling 125 cycles healthy", "expected_source": "rul_interpretation.md"},
+  {"query": "separate a sensor fault from genuine asset degradation corroboration", "expected_source": "anomaly_review_guidelines.md"},
+  {"query": "distinguish a transient spike from a sustained persistent trend", "expected_source": "anomaly_review_guidelines.md"},
+  {"query": "are model outputs advisory decision support or decisions", "expected_source": "human_in_loop_policy.md"},
+  {"query": "no safety-critical automation the system must not command shutdowns", "expected_source": "human_in_loop_policy.md"}
+]
