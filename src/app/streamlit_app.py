@@ -1,8 +1,10 @@
 """Streamlit demo for the GenAI-assisted condition-monitoring prototype.
 
-Select a test unit and see: a sensor trend plot for the top signals, the
-model's RUL / risk-band output, the retrieved knowledge-base snippets, the
-grounded diagnostic report, and a fixed limitations banner.
+Written for a non-expert reader (a hiring manager, or a quick skim): a one-line
+"what is this", a plain-language walk-through of the pipeline, an engine picker,
+a labelled sensor-trend plot, the model's Remaining-Useful-Life estimate with a
+colour-coded risk badge, and a formatted (never raw-JSON) diagnostic report whose
+every claim is quoted from a cited reference document.
 
 Run:  .venv/bin/streamlit run src/app/streamlit_app.py
 
@@ -32,6 +34,58 @@ LIMITATIONS_BANNER = (
     "and not a source of safety-critical decisions. Every output is advisory and "
     "requires review by a qualified human."
 )
+
+WHAT_IS_THIS = (
+    "This demo reads an aircraft engine's recent sensor history, estimates how "
+    "much longer it can safely run, and writes a plain-English maintenance note "
+    "in which every stated cause and next step is quoted from a cited reference "
+    "document — it never invents a diagnosis."
+)
+
+# Risk band -> (badge colour, label, plain-English meaning). Same thresholds the
+# model uses: High <= 30 cycles, Medium 30-80, Low > 80.
+RISK_BADGE = {
+    "high": ("#c0392b", "HIGH", "schedule inspection soon — near end-of-life"),
+    "medium": ("#e67e22", "MEDIUM", "degrading — monitor closely"),
+    "low": ("#27ae60", "LOW", "healthy — keep monitoring"),
+}
+
+# Physical meaning of C-MAPSS sensor columns. Source: Saxena et al., "Damage
+# Propagation Modeling for Aircraft Engine Run-to-Failure Simulation," PHM08
+# (Table 1) — the paper cited in data/raw/CMAPSSData/readme.txt. The readme
+# itself labels these columns only as "sensor measurement 1-21"; the physical
+# names below are the community-standard interpretation from that reference, not
+# printed in the readme. (short label used on plots, longer description in table)
+SENSOR_META = {
+    "sensor_1": ("T2", "Fan inlet total temperature (°R)"),
+    "sensor_2": ("T24", "LPC outlet total temperature (°R)"),
+    "sensor_3": ("T30", "HPC outlet total temperature (°R)"),
+    "sensor_4": ("T50", "LPT outlet total temperature (°R)"),
+    "sensor_5": ("P2", "Fan inlet pressure (psia)"),
+    "sensor_6": ("P15", "Bypass-duct total pressure (psia)"),
+    "sensor_7": ("P30", "HPC outlet total pressure (psia)"),
+    "sensor_8": ("Nf", "Physical fan speed (rpm)"),
+    "sensor_9": ("Nc", "Physical core speed (rpm)"),
+    "sensor_10": ("epr", "Engine pressure ratio P50/P2"),
+    "sensor_11": ("Ps30", "HPC outlet static pressure (psia)"),
+    "sensor_12": ("phi", "Fuel flow to Ps30 ratio (pps/psi)"),
+    "sensor_13": ("NRf", "Corrected fan speed (rpm)"),
+    "sensor_14": ("NRc", "Corrected core speed (rpm)"),
+    "sensor_15": ("BPR", "Bypass ratio"),
+    "sensor_16": ("farB", "Burner fuel-air ratio"),
+    "sensor_17": ("htBleed", "Bleed enthalpy"),
+    "sensor_18": ("Nf_dmd", "Demanded fan speed (rpm)"),
+    "sensor_19": ("PCNfR_dmd", "Demanded corrected fan speed (rpm)"),
+    "sensor_20": ("W31", "HPT coolant bleed (lbm/s) — interpretation varies across sources"),
+    "sensor_21": ("W32", "LPT coolant bleed (lbm/s) — interpretation varies across sources"),
+}
+
+_TREND_ARROW = {"increasing": "↑", "decreasing": "↓", "flat": "→"}
+
+
+def _short_label(sensor_col: str) -> str:
+    meta = SENSOR_META.get(sensor_col)
+    return f"{meta[0]}" if meta else sensor_col
 
 
 def _load_evidence(unit_id: int) -> dict | None:
@@ -67,8 +121,30 @@ def _run() -> None:
     def get_raw() -> "pd.DataFrame":
         return be.load_raw_test()
 
-    st.title("GenAI-Assisted Condition Monitoring — Diagnostic Prototype")
+    # ======================================================================
+    # Header: what this is, the fixed limitations banner, how to read it
+    # ======================================================================
+    st.title("Predicting When an Engine Needs Maintenance")
+    st.markdown(f"#### {WHAT_IS_THIS}")
     st.warning(LIMITATIONS_BANNER, icon="⚠️")
+
+    with st.expander("How to read this page (30-second guide)", expanded=False):
+        st.markdown(
+            "This prototype runs a **4-step pipeline**. You are looking at the "
+            "output of all four for one engine:\n\n"
+            "1. **Sensors** — we take the engine's recent readings (temperatures, "
+            "pressures, speeds) from its last flight cycles.\n"
+            "2. **Prediction** — a simple machine-learning model estimates the "
+            "engine's *Remaining Useful Life*: how many more flight cycles it can "
+            "run before maintenance-critical wear.\n"
+            "3. **Retrieved guidance** — the system searches a small library of "
+            "maintenance and engineering notes for passages relevant to this "
+            "engine's condition.\n"
+            "4. **Cited report** — it writes a short diagnosis, and **every** "
+            "possible cause or next step it lists is quoted from those notes with "
+            "a citation. If it finds nothing relevant, it says so rather than "
+            "guessing. A qualified human always makes the final call."
+        )
 
     if not be.PRED_PATH.exists():
         st.error(
@@ -81,101 +157,176 @@ def _run() -> None:
     raw = get_raw()
     retriever = get_retriever()
 
-    # --- Sidebar controls --------------------------------------------------
-    st.sidebar.header("Select asset")
+    # ======================================================================
+    # Sidebar controls
+    # ======================================================================
+    st.sidebar.header("Pick an engine")
+    st.sidebar.caption(
+        "Each engine is one test unit from the NASA turbofan fleet. Pick one to "
+        "see its sensors, its predicted remaining life, and its diagnosis."
+    )
     unit_ids = sorted(preds["unit_id"].astype(int).tolist())
-    unit_id = st.sidebar.selectbox("Test unit (asset) id", unit_ids)
-    window = st.sidebar.slider("Trend window (cycles)", 10, 60, be.LAST_WINDOW)
+    unit_id = st.sidebar.selectbox("Engine (test unit) id", unit_ids)
+    window = st.sidebar.slider(
+        "How many recent cycles to plot", 10, 60, be.LAST_WINDOW
+    )
     if len(retriever) == 0:
         st.sidebar.info("Knowledge base is empty — diagnostic guidance unavailable.")
 
-    prow = preds[preds["unit_id"] == unit_id].iloc[0]
+    prow = preds[preds["unit_id"] == int(unit_id)].iloc[0]
     evidence = _load_evidence(int(unit_id))
+    band = str(prow["risk_band"]).lower()
 
-    # --- Model output ------------------------------------------------------
-    st.subheader(f"Model output — asset {unit_id}")
-    band = str(prow["risk_band"])
-    color = {"high": "🔴", "medium": "🟠", "low": "🟢"}.get(band, "⚪")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Last cycle", int(prow["last_cycle"]))
-    c2.metric("Predicted RUL (cycles)", round(float(prow["pred_rul"]), 2))
-    c3.metric("Risk band", f"{color} {band}")
+    # ======================================================================
+    # Model output: RUL + risk badge
+    # ======================================================================
+    st.header(f"Engine {unit_id} — health at a glance")
+    c1, c2 = st.columns(2)
+    c1.metric("Flight cycles flown so far", int(prow["last_cycle"]))
+    c2.metric("Predicted Remaining Useful Life", f"{round(float(prow['pred_rul']))} cycles")
     st.caption(
-        "true RUL is held out for evaluation only and is not shown here as a "
-        "model input."
+        "**Remaining Useful Life (RUL)** — roughly how many flight cycles this "
+        "engine has left before maintenance-critical degradation. Higher is "
+        "healthier. (The true RUL is held out for scoring only and is never shown "
+        "to the model as an input.)"
     )
 
-    # --- Sensor trend plot -------------------------------------------------
-    st.subheader("Sensor trends (top contributing signals)")
+    color, label, meaning = RISK_BADGE.get(
+        band, ("#7f8c8d", "UNKNOWN", "review required")
+    )
+    st.markdown(
+        f"<div style='margin:0.4rem 0 0.2rem 0'>"
+        f"<span style='background:{color};color:#fff;padding:4px 12px;"
+        f"border-radius:6px;font-weight:700;font-size:0.95rem'>{label} RISK</span>"
+        f"&nbsp;&nbsp;{meaning}</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Risk band comes straight from the predicted RUL: High ≤ 30 cycles · "
+        "Medium 30–80 · Low > 80. It is an advisory triage signal, not a control "
+        "setpoint."
+    )
+
+    # ======================================================================
+    # Sensor trends
+    # ======================================================================
+    st.header("What the sensors are doing")
     unit_raw = raw[raw["unit"] == int(unit_id)].sort_values("cycle").tail(window)
     if evidence and evidence.get("sensor_summary"):
         sensors = list(evidence["sensor_summary"].keys())
+        trends = {k: v.get("trend") for k, v in evidence["sensor_summary"].items()}
     else:
         sensors = be.rank_sensors_from_importances(
             be.load_feature_importances(), be.TOP_K_SENSORS
         )
+        trends = {}
     sensors = [s for s in sensors if s in unit_raw.columns][:6]
+
     if sensors and not unit_raw.empty:
         ncol = 2
         nrow = (len(sensors) + ncol - 1) // ncol
-        fig, axes = plt.subplots(nrow, ncol, figsize=(10, 2.2 * nrow), squeeze=False)
+        fig, axes = plt.subplots(nrow, ncol, figsize=(10, 2.3 * nrow), squeeze=False)
         for i, s in enumerate(sensors):
             ax = axes[i // ncol][i % ncol]
             ax.plot(unit_raw["cycle"], unit_raw[s], marker=".", linewidth=1)
-            ax.set_title(s, fontsize=9)
+            arrow = _TREND_ARROW.get(trends.get(s), "")
+            ax.set_title(f"{_short_label(s)}  {arrow}", fontsize=9)
+            ax.set_xlabel("flight cycle", fontsize=7)
             ax.tick_params(labelsize=7)
         for j in range(len(sensors), nrow * ncol):
             axes[j // ncol][j % ncol].axis("off")
         fig.tight_layout()
         st.pyplot(fig)
-    else:
-        st.info("No sensor data available for this unit.")
+        st.caption(
+            "Each panel is one of the model's most-informative sensors over this "
+            "engine's most recent cycles; the arrow shows its overall direction "
+            "(↑ rising, ↓ falling, → flat). A **sustained drift that several "
+            "physically-related sensors share** is the fingerprint of real "
+            "degradation as the engine nears end-of-life; a single lone jump is "
+            "more likely sensor noise."
+        )
 
-    # --- Diagnostic report -------------------------------------------------
-    st.subheader("Diagnostic assistant report")
+        with st.expander("What do these sensors measure?"):
+            table = pd.DataFrame(
+                [
+                    {
+                        "Sensor": s,
+                        "Symbol": SENSOR_META.get(s, ("?", ""))[0],
+                        "What it measures": SENSOR_META.get(s, ("", "—"))[1],
+                    }
+                    for s in sensors
+                ]
+            )
+            st.table(table)
+            st.caption(
+                "Physical meanings are from Saxena et al., *Damage Propagation "
+                "Modeling for Aircraft Engine Run-to-Failure Simulation* (PHM08, "
+                "Table 1) — the paper cited in the dataset readme. The dataset's "
+                "own `readme.txt` labels these columns only as 'sensor measurement "
+                "1–21'; the names here are the community-standard reading of that "
+                "reference, not printed in the readme."
+            )
+    else:
+        st.info("No sensor data available for this engine.")
+
+    # ======================================================================
+    # Diagnostic report (formatted, never raw JSON)
+    # ======================================================================
+    st.header("Diagnostic report")
     if not evidence:
         st.info(
-            "No evidence record for this unit. Ensure the DS artifacts exist and "
+            "No evidence record for this engine. Ensure the DS artifacts exist and "
             "run `src/diagnostics/build_evidence.py`."
         )
         return
 
     report = diagnose(evidence, retriever)
-    st.markdown(f"**Summary.** {report['summary']}")
 
-    st.markdown("**Supporting evidence (from the model + sensors):**")
+    st.markdown("**In plain English**")
+    st.write(report["summary"])
+
+    st.markdown("**What the data shows**")
     for item in report["supporting_evidence"]:
         st.markdown(f"- {item}")
 
-    st.markdown("**Possible failure modes (retrieved, cited):**")
+    st.markdown("**Possible failure modes** (quoted from the reference library)")
     for fm in report["possible_failure_modes"]:
-        src = (
-            f"  \n  ↳ _source: {fm['source_file']} → {fm['section']}_"
-            if fm.get("source_file")
-            else ""
-        )
-        st.markdown(f"- **{fm['failure_mode']}** — {fm['evidence']}{src}")
-
-    st.markdown("**Recommended next steps (retrieved, cited):**")
-    for stp in report["recommended_next_steps"]:
-        src = (
-            f"  \n  ↳ _source: {stp['source_file']} → {stp['section']}_"
-            if stp.get("source_file")
-            else ""
-        )
-        st.markdown(f"- **{stp['step']}** — {stp['detail']}{src}")
-
-    st.markdown(f"**Uncertainty.** {report['uncertainty']}")
-
-    with st.expander("Retrieved knowledge-base snippets (citations)"):
-        if report["citations"]:
-            for cite in report["citations"]:
-                st.markdown(f"- `{cite['source_file']}` → **{cite['section']}**")
+        if fm.get("source_file"):
+            st.markdown(f"> **{fm['failure_mode']}.** {fm['evidence']}")
+            st.caption(f"📄 {fm['source_file']} · {fm['section']}")
         else:
-            st.markdown("_No relevant snippets retrieved._")
+            st.info(fm["evidence"])
+
+    st.markdown("**Recommended next steps**")
+    for stp in report["recommended_next_steps"]:
+        if stp.get("source_file"):
+            st.markdown(f"☐ **{stp['step']}** — {stp['detail']}")
+            st.caption(f"📄 {stp['source_file']} · {stp['section']}")
+        else:
+            st.info(stp["detail"])
+
+    st.info(f"**Uncertainty.** {report['uncertainty']}", icon="ℹ️")
 
     if report["human_review_required"]:
-        st.error("Human review required before any maintenance action.", icon="🧑‍🔧")
+        st.warning(
+            "Human review required — a qualified engineer must confirm this before "
+            "any maintenance action. This tool focuses attention; it does not "
+            "decide.",
+            icon="🧑‍🔧",
+        )
+
+    with st.expander("Sources cited in this report"):
+        if report["citations"]:
+            for cite in report["citations"]:
+                st.markdown(f"- `{cite['source_file']}` · **{cite['section']}**")
+        else:
+            st.markdown("_No relevant sources were retrieved for this engine._")
+        st.caption(
+            "Every failure mode and next step above is a verbatim quote from one "
+            "of these knowledge-base sections — the assistant composes, it does "
+            "not invent."
+        )
+
     st.caption(report["safety_note"])
 
 
