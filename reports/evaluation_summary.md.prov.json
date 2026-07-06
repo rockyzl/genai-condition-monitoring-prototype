@@ -1,0 +1,20 @@
+{
+  "stage": "s10_eval",
+  "seed": 42,
+  "params": {
+    "retrieval_k": 4
+  },
+  "params_hash": "e7f78700c3fadb46",
+  "input_hashes": {
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/data/processed/test_predictions.csv": "a0bc5e58a9fdda8113977ed5c4ec514bb540fb76a178d764f26cd38bec92c113",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/reports/metrics_model.json": "a094c2ae8ceb359acaa70d63195b218e90c16ba960bd06eafa121e8b9692a5f8",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/data/processed/evidence/_evidence_manifest.json": "cb07c48feb2feeb454c3d4852b39f77d6b09d5cd62b1540e53d903f4bdcf37a0",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/docs/knowledge_base/anomaly_review_guidelines.md": "5b3c24dad6508b3e0f82decca74e121d66ec0deca79ad9450a2c611c47f81a01",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/docs/knowledge_base/failure_modes.md": "8a533cd165fc15e56230930b8ff7f0f5f20ad489bb3eb9dc0663c9fb69ec495d",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/docs/knowledge_base/human_in_loop_policy.md": "2aabecb3c427f5244d83916fa33358ddecde2bd50c60c5bce310e8f81edf76b4",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/docs/knowledge_base/maintenance_review_checklist.md": "a4c5bb9a9663036b5dd307c5d9b12a3745ef02e759a7617ad51887f759611833",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/docs/knowledge_base/rul_interpretation.md": "674ecc152f2f47c1a2327bfdbfbab64a034b1f644fac6b81130d0947225219a4"
+  },
+  "git_sha": "31607d9",
+  "timestamp": "2026-07-06T22:49:44+00:00"
+}

@@ -66,17 +66,39 @@ PROCESSED_DIR = ROOT / "data" / "processed"
 REPORTS_DIR = ROOT / "reports"
 FIGURES_DIR = REPORTS_DIR / "figures"
 
+MODEL_PATH = MODELS_DIR / "rul_baseline.joblib"
+PREDS_PATH = PROCESSED_DIR / "test_predictions.csv"
+FI_PATH = PROCESSED_DIR / "feature_importances.csv"
+META_PATH = PROCESSED_DIR / "model_meta.json"
+METRICS_PATH = REPORTS_DIR / "metrics_model.json"
 
-def risk_band(pred_rul: float) -> str:
+#: RandomForest hyper-parameters. Kept as a module constant so the pipeline
+#: config layer and this script's ``__main__`` share one source of truth; the
+#: values are exactly those used before the pipeline refactor (byte-identical).
+RF_PARAMS = {
+    "n_estimators": 200,
+    "max_depth": None,
+    "min_samples_leaf": 3,
+    "max_features": "sqrt",
+    "random_state": RANDOM_STATE,
+    "n_jobs": -1,
+}
+
+#: Risk-band cutoffs (predicted RUL). high <= HIGH_MAX < medium <= MEDIUM_MAX.
+HIGH_MAX = 30
+MEDIUM_MAX = 80
+
+
+def risk_band(pred_rul: float, high_max: float = HIGH_MAX, medium_max: float = MEDIUM_MAX) -> str:
     """Map a predicted RUL to a maintenance risk band.
 
     high:   pred_rul <= 30       (act soon)
     medium: 30 < pred_rul <= 80  (watch / schedule)
     low:    pred_rul > 80        (healthy)
     """
-    if pred_rul <= 30:
+    if pred_rul <= high_max:
         return "high"
-    if pred_rul <= 80:
+    if pred_rul <= medium_max:
         return "medium"
     return "low"
 
@@ -90,90 +112,146 @@ def _metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     }
 
 
-def train_and_evaluate() -> dict:
+def _ensure_dirs() -> None:
     for d in (MODELS_DIR, PROCESSED_DIR, REPORTS_DIR, FIGURES_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
-    # --- Train ---------------------------------------------------------------
-    train_raw = load_raw(DATASET, "train")
-    train_raw = add_training_rul(train_raw, cap=RUL_CAP)
+
+def _feature_importance_frame(model, feature_cols: list[str]) -> pd.DataFrame:
+    return (
+        pd.DataFrame({"feature": feature_cols, "importance": model.feature_importances_})
+        .sort_values("importance", ascending=False)
+        .reset_index(drop=True)
+        .assign(importance=lambda d: d["importance"].round(6))
+    )
+
+
+def fit_model(
+    dataset: str = DATASET,
+    cap: int = RUL_CAP,
+    rf_params: dict | None = None,
+) -> dict:
+    """Fit the RandomForest RUL model on the training split.
+
+    Returns a dict with the fitted ``model``, ``feature_cols``, the training
+    feature frame, and ``n_train_rows`` — the single training step, so that the
+    pipeline's model stage and the ``__main__`` orchestrator share one code path.
+    """
+    rf_params = dict(rf_params if rf_params is not None else RF_PARAMS)
+    train_raw = load_raw(dataset, "train")
+    train_raw = add_training_rul(train_raw, cap=cap)
     train_feat, feature_cols = build_features(train_raw)
     X_train = train_feat[feature_cols].to_numpy()
     y_train = train_feat["rul"].to_numpy()
 
-    model = RandomForestRegressor(
-        n_estimators=200,
-        max_depth=None,
-        min_samples_leaf=3,
-        max_features="sqrt",
-        random_state=RANDOM_STATE,
-        n_jobs=-1,
-    )
+    model = RandomForestRegressor(**rf_params)
     model.fit(X_train, y_train)
+    return {
+        "model": model,
+        "feature_cols": feature_cols,
+        "n_train_rows": int(len(train_feat)),
+        "train_raw": train_raw,
+    }
 
-    # --- Predict at each test unit's last cycle ------------------------------
-    test_raw = load_raw(DATASET, "test")
+
+def save_model_artifacts(
+    fitted: dict,
+    cap: int = RUL_CAP,
+    model_path=MODEL_PATH,
+    fi_path=FI_PATH,
+    meta_path=META_PATH,
+) -> dict:
+    """Persist the model joblib, feature importances CSV, and model-meta JSON.
+
+    ``model_meta.json`` carries the small facts the downstream predict stage
+    needs to rebuild ``metrics_model.json`` (n_train_rows / n_features) without
+    retraining, keeping the joblib contract (model / feature_cols / rul_cap)
+    unchanged.
+    """
+    _ensure_dirs()
+    model = fitted["model"]
+    feature_cols = fitted["feature_cols"]
+
+    fi_df = _feature_importance_frame(model, feature_cols)
+    fi_df.to_csv(fi_path, index=False)
+
+    joblib.dump({"model": model, "feature_cols": feature_cols, "rul_cap": cap}, model_path)
+
+    meta = {
+        "dataset": DATASET,
+        "n_train_rows": int(fitted["n_train_rows"]),
+        "n_features": len(feature_cols),
+        "rul_cap": int(cap),
+        "model": "RandomForestRegressor",
+        "model_params": {
+            "n_estimators": RF_PARAMS["n_estimators"],
+            "min_samples_leaf": RF_PARAMS["min_samples_leaf"],
+            "max_features": RF_PARAMS["max_features"],
+            "random_state": RF_PARAMS["random_state"],
+        },
+    }
+    with open(meta_path, "w") as fh:
+        json.dump(meta, fh, indent=2)
+    return {"fi_df": fi_df, "meta": meta}
+
+
+def load_model_bundle(model_path=MODEL_PATH) -> dict:
+    """Load the persisted joblib bundle (model + feature_cols + rul_cap)."""
+    return joblib.load(model_path)
+
+
+def score_test_units(
+    model,
+    feature_cols: list[str],
+    cap: int,
+    dataset: str = DATASET,
+    high_max: float = HIGH_MAX,
+    medium_max: float = MEDIUM_MAX,
+) -> dict:
+    """Score each test unit at its last cycle. Returns predictions frame + arrays."""
+    test_raw = load_raw(dataset, "test")
     test_feat, _ = build_features(test_raw)
     test_last = last_cycle_per_unit(test_feat)
     X_test = test_last[feature_cols].to_numpy()
     pred = model.predict(X_test)
     pred = np.clip(pred, 0, None)  # RUL cannot be negative
 
-    true_uncapped = load_test_rul(DATASET).to_numpy()  # official, in unit order
-    true_capped = np.clip(true_uncapped, 0, RUL_CAP)
+    true_uncapped = load_test_rul(dataset).to_numpy()  # official, in unit order
+    true_capped = np.clip(true_uncapped, 0, cap)
 
-    metrics_capped = _metrics(true_capped, pred)
-    metrics_uncapped = _metrics(true_uncapped, pred)
-
-    # --- Predictions CSV (interface contract) --------------------------------
     preds_df = pd.DataFrame(
         {
             "unit_id": test_last["unit"].to_numpy(),
             "last_cycle": test_last["cycle"].to_numpy(),
             "true_rul": true_uncapped,  # official uncapped ground truth
             "pred_rul": np.round(pred, 2),
-            "risk_band": [risk_band(p) for p in pred],
+            "risk_band": [risk_band(p, high_max, medium_max) for p in pred],
         }
     )
-    preds_path = PROCESSED_DIR / "test_predictions.csv"
-    preds_df.to_csv(preds_path, index=False)
+    return {
+        "preds_df": preds_df,
+        "pred": pred,
+        "true_capped": true_capped,
+        "true_uncapped": true_uncapped,
+        "metrics_capped": _metrics(true_capped, pred),
+        "metrics_uncapped": _metrics(true_uncapped, pred),
+    }
 
-    # --- Feature importances -------------------------------------------------
-    fi_df = (
-        pd.DataFrame({"feature": feature_cols, "importance": model.feature_importances_})
-        .sort_values("importance", ascending=False)
-        .reset_index(drop=True)
-    )
-    fi_df["importance"] = fi_df["importance"].round(6)
-    fi_path = PROCESSED_DIR / "feature_importances.csv"
-    fi_df.to_csv(fi_path, index=False)
 
-    # --- Save model ----------------------------------------------------------
-    model_path = MODELS_DIR / "rul_baseline.joblib"
-    joblib.dump({"model": model, "feature_cols": feature_cols, "rul_cap": RUL_CAP}, model_path)
-
-    # --- Figures -------------------------------------------------------------
-    _plot_pred_vs_true(true_capped, pred)
-    _plot_error_hist(pred - true_capped)
-    _plot_degradation(train_raw)
-
-    # --- Metrics JSON --------------------------------------------------------
+def build_metrics(scored: dict, fi_df: pd.DataFrame, meta: dict) -> dict:
+    """Assemble the ``metrics_model.json`` payload (identical layout to before)."""
+    preds_df = scored["preds_df"]
     band_counts = preds_df["risk_band"].value_counts().to_dict()
-    metrics = {
-        "dataset": DATASET,
+    return {
+        "dataset": meta["dataset"],
         "model": "RandomForestRegressor",
-        "model_params": {
-            "n_estimators": 200,
-            "min_samples_leaf": 3,
-            "max_features": "sqrt",
-            "random_state": RANDOM_STATE,
-        },
-        "rul_cap": RUL_CAP,
+        "model_params": meta["model_params"],
+        "rul_cap": meta["rul_cap"],
         "n_test_units": int(len(preds_df)),
-        "n_train_rows": int(len(train_feat)),
-        "n_features": len(feature_cols),
-        "metrics_vs_capped_truth": metrics_capped,
-        "metrics_vs_uncapped_truth": metrics_uncapped,
+        "n_train_rows": int(meta["n_train_rows"]),
+        "n_features": meta["n_features"],
+        "metrics_vs_capped_truth": scored["metrics_capped"],
+        "metrics_vs_uncapped_truth": scored["metrics_uncapped"],
         "risk_band_counts": {k: int(v) for k, v in band_counts.items()},
         "top_features": fi_df.head(8).to_dict(orient="records"),
         "notes": (
@@ -183,12 +261,49 @@ def train_and_evaluate() -> dict:
             "Baseline only; no hyperparameter search, no sequence model."
         ),
     }
-    with open(REPORTS_DIR / "metrics_model.json", "w") as fh:
+
+
+def write_predictions_and_metrics(
+    scored: dict,
+    fi_df: pd.DataFrame,
+    meta: dict,
+    train_raw: pd.DataFrame,
+    preds_path=PREDS_PATH,
+    metrics_path=METRICS_PATH,
+) -> dict:
+    """Write test_predictions.csv, metrics_model.json, and the three figures."""
+    _ensure_dirs()
+    scored["preds_df"].to_csv(preds_path, index=False)
+
+    _plot_pred_vs_true(scored["true_capped"], scored["pred"])
+    _plot_error_hist(scored["pred"] - scored["true_capped"])
+    _plot_degradation(train_raw)
+
+    metrics = build_metrics(scored, fi_df, meta)
+    with open(metrics_path, "w") as fh:
         json.dump(metrics, fh, indent=2)
+    return metrics
+
+
+def train_and_evaluate() -> dict:
+    # --- Train ---------------------------------------------------------------
+    fitted = fit_model(DATASET, RUL_CAP, RF_PARAMS)
+    saved = save_model_artifacts(fitted, RUL_CAP)
+    fi_df = saved["fi_df"]
+    meta = saved["meta"]
+
+    # --- Predict at each test unit's last cycle ------------------------------
+    scored = score_test_units(fitted["model"], fitted["feature_cols"], RUL_CAP, DATASET)
+
+    # --- Persist predictions, figures, metrics -------------------------------
+    metrics = write_predictions_and_metrics(scored, fi_df, meta, fitted["train_raw"])
 
     # --- Console summary -----------------------------------------------------
-    print(f"[train] rows={len(train_feat)}  features={len(feature_cols)}")
-    print(f"[test ] units={len(preds_df)}")
+    metrics_capped = scored["metrics_capped"]
+    metrics_uncapped = scored["metrics_uncapped"]
+    band_counts = scored["preds_df"]["risk_band"].value_counts().to_dict()
+    print(f"[train] rows={fitted['n_train_rows']}  features={len(fitted['feature_cols'])}")
+    print(f"[test ] units={len(scored['preds_df'])}")
     print(
         "[capped   truth] "
         f"RMSE={metrics_capped['rmse']:.2f}  MAE={metrics_capped['mae']:.2f}  R2={metrics_capped['r2']:.3f}"
@@ -198,10 +313,10 @@ def train_and_evaluate() -> dict:
         f"RMSE={metrics_uncapped['rmse']:.2f}  MAE={metrics_uncapped['mae']:.2f}  R2={metrics_uncapped['r2']:.3f}"
     )
     print(f"[bands] {band_counts}")
-    print(f"[write] {preds_path}")
-    print(f"[write] {fi_path}")
-    print(f"[write] {model_path}")
-    print(f"[write] {REPORTS_DIR / 'metrics_model.json'}")
+    print(f"[write] {PREDS_PATH}")
+    print(f"[write] {FI_PATH}")
+    print(f"[write] {MODEL_PATH}")
+    print(f"[write] {METRICS_PATH}")
     print(f"[write] figures -> {FIGURES_DIR}")
     return metrics
 

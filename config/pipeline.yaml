@@ -1,0 +1,51 @@
+# Pipeline configuration — the single source of truth for the 10-stage
+# condition-monitoring pipeline. Every default here reproduces the behaviour
+# that was previously hard-coded across src/, so `python -m src.pipeline run --all`
+# yields byte-identical model artifacts (test_predictions.csv,
+# feature_importances.csv, metrics_model.json) to the standalone scripts.
+#
+# Loaded by src/pipeline/config.py into a PipelineConfig dataclass. Missing keys
+# fall back to the dataclass defaults, so this file may be trimmed freely.
+
+seed: 42                # global RNG seed (== RandomForest random_state)
+dataset: FD001          # only FD001 is exercised in this prototype
+rul_cap: 125            # piecewise-linear RUL ceiling (cycles); modelling choice
+rolling_window: 5       # cycles for the rolling mean/std sensor features
+retrieval_k: 4          # top-k KB chunks the RAG retriever returns
+
+# Paths are resolved relative to the repository root by the loader.
+paths:
+  data_raw: data/raw/CMAPSSData
+  data_processed: data/processed
+  reports: reports
+  figures: reports/figures
+  eda: reports/eda
+  evidence: data/processed/evidence
+  diagnostics: data/processed/diagnostics
+  models: models
+  knowledge_base: docs/knowledge_base
+  journal: reports/pipeline_journal.jsonl
+  manifest: reports/pipeline_manifest.md
+
+# RandomForest hyper-parameters (the current champion / only Phase-A candidate).
+rf_params:
+  n_estimators: 200
+  max_depth: null
+  min_samples_leaf: 3
+  max_features: sqrt
+  n_jobs: -1
+
+# Predicted-RUL cutoffs mapping a unit to a maintenance risk band:
+#   high <= high_max < medium <= medium_max < low
+risk_thresholds:
+  high_max: 30
+  medium_max: 80
+
+# Reliability-gate thresholds. Placeholder for Phase C (autopilot supervisor):
+# the schema is fixed now so gate outcomes can be hashed into the trace without
+# a config migration. Phase A neither reads nor enforces these.
+gate_thresholds:
+  ridge_floor_rmse: null          # champion must beat this Ridge floor (Phase C)
+  champion_margin_rmse: null      # marginal-vs-Ridge gap that raises a CARD
+  min_history_cycles: 20          # units below this are "can't be trusted yet"
+  max_optimistic_fraction: null   # degenerate risk-distribution guard

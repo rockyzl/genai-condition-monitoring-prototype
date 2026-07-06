@@ -1,0 +1,23 @@
+{
+  "stage": "s05_model",
+  "seed": 42,
+  "params": {
+    "rf_params": {
+      "n_estimators": 200,
+      "max_depth": null,
+      "min_samples_leaf": 3,
+      "max_features": "sqrt",
+      "random_state": 42,
+      "n_jobs": -1
+    },
+    "rul_cap": 125,
+    "dataset": "FD001"
+  },
+  "params_hash": "39c9ff69ad454de3",
+  "input_hashes": {
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/data/processed/feature_spec.json": "ce2a43b56c4de538a10329a7f534b5110f78aaa650f142b49ff281412ddc41a5",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/data/raw/CMAPSSData/train_FD001.txt": "963b5e22825b34d8b21c69e1aeb4af3e647050eb672ee8834ba4b5d91d2de0f8"
+  },
+  "git_sha": "31607d9",
+  "timestamp": "2026-07-06T22:49:40+00:00"
+}

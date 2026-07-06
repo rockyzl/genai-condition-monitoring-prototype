@@ -1,0 +1,157 @@
+{
+  "dataset": "FD001",
+  "n_units": 100,
+  "n_train_rows": 20631,
+  "rul_cap": 125,
+  "cap_rationale": "38.9% of training rows have a true remaining life above 125 cycles — healthy early life where the sensors barely move. Clipping the target at 125 stops the model fitting noise on that healthy stretch and matches how a maintenance team acts (anything beyond ~125 cycles is simply 'healthy').",
+  "rul_capping": {
+    "n_rows": 20631,
+    "n_rows_capped": 8031,
+    "frac_rows_capped_pct": 38.9
+  },
+  "lifetime": {
+    "min": 128,
+    "max": 362,
+    "mean": 206.3,
+    "median": 199
+  },
+  "sensor_monotonicity": [
+    {
+      "sensor": "sensor_11",
+      "corr_with_rul": -0.6962,
+      "abs_corr": 0.6962
+    },
+    {
+      "sensor": "sensor_4",
+      "corr_with_rul": -0.6789,
+      "abs_corr": 0.6789
+    },
+    {
+      "sensor": "sensor_12",
+      "corr_with_rul": 0.672,
+      "abs_corr": 0.672
+    },
+    {
+      "sensor": "sensor_7",
+      "corr_with_rul": 0.6572,
+      "abs_corr": 0.6572
+    },
+    {
+      "sensor": "sensor_15",
+      "corr_with_rul": -0.6427,
+      "abs_corr": 0.6427
+    },
+    {
+      "sensor": "sensor_21",
+      "corr_with_rul": 0.6357,
+      "abs_corr": 0.6357
+    },
+    {
+      "sensor": "sensor_20",
+      "corr_with_rul": 0.6294,
+      "abs_corr": 0.6294
+    },
+    {
+      "sensor": "sensor_2",
+      "corr_with_rul": -0.6065,
+      "abs_corr": 0.6065
+    },
+    {
+      "sensor": "sensor_17",
+      "corr_with_rul": -0.6062,
+      "abs_corr": 0.6062
+    },
+    {
+      "sensor": "sensor_3",
+      "corr_with_rul": -0.5845,
+      "abs_corr": 0.5845
+    },
+    {
+      "sensor": "sensor_8",
+      "corr_with_rul": -0.564,
+      "abs_corr": 0.564
+    },
+    {
+      "sensor": "sensor_13",
+      "corr_with_rul": -0.5626,
+      "abs_corr": 0.5626
+    },
+    {
+      "sensor": "sensor_9",
+      "corr_with_rul": -0.3901,
+      "abs_corr": 0.3901
+    },
+    {
+      "sensor": "sensor_14",
+      "corr_with_rul": -0.3068,
+      "abs_corr": 0.3068
+    }
+  ],
+  "flat_sensors": [
+    {
+      "sensor": "sensor_1",
+      "std": 0.0,
+      "n_unique": 1
+    },
+    {
+      "sensor": "sensor_10",
+      "std": 0.0,
+      "n_unique": 1
+    },
+    {
+      "sensor": "sensor_16",
+      "std": 0.0,
+      "n_unique": 1
+    },
+    {
+      "sensor": "sensor_18",
+      "std": 0.0,
+      "n_unique": 1
+    },
+    {
+      "sensor": "sensor_19",
+      "std": 0.0,
+      "n_unique": 1
+    },
+    {
+      "sensor": "sensor_5",
+      "std": 0.0,
+      "n_unique": 1
+    },
+    {
+      "sensor": "sensor_6",
+      "std": 0.001389,
+      "n_unique": 2
+    }
+  ],
+  "op_setting_std": {
+    "op_setting_1": 0.002187,
+    "op_setting_2": 0.000293,
+    "op_setting_3": 0.0
+  },
+  "informative_sensors_expected": [
+    "sensor_2",
+    "sensor_3",
+    "sensor_4",
+    "sensor_7",
+    "sensor_8",
+    "sensor_9",
+    "sensor_11",
+    "sensor_12",
+    "sensor_13",
+    "sensor_14",
+    "sensor_15",
+    "sensor_17",
+    "sensor_20",
+    "sensor_21"
+  ],
+  "dropped_sensors_expected": [
+    "sensor_1",
+    "sensor_5",
+    "sensor_6",
+    "sensor_10",
+    "sensor_16",
+    "sensor_18",
+    "sensor_19"
+  ]
+}

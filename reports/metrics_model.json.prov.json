@@ -1,0 +1,20 @@
+{
+  "stage": "s07_predict",
+  "seed": 42,
+  "params": {
+    "rul_cap": 125,
+    "dataset": "FD001",
+    "high_max": 30,
+    "medium_max": 80
+  },
+  "params_hash": "e9efd7d84612716e",
+  "input_hashes": {
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/models/rul_baseline.joblib": "b02134ab3f06b7318a4a12b29f8830bb034f6a48ca4f37a62d2a5742cb517f6c",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/data/processed/feature_importances.csv": "0c40923a62587189471de2456b51dec0676d80a366e430531fdf96f184d03f99",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/data/processed/model_meta.json": "a2c84e44990c050eb22c75fe923396b876868d717518c5a7acd98b3bc17dff56",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/data/raw/CMAPSSData/test_FD001.txt": "3cda7109ce17bafb5443f2ac926cfcf88154b941b8c4cf95eb55d1ddd6f52851",
+    "/home/lu2/dev/personal/projects/learning/genai-condition-monitoring-prototype/data/raw/CMAPSSData/RUL_FD001.txt": "a19c8ec94931949d0485bdc35118206e9c81c4547b422efb9cf86f4ceddbceca"
+  },
+  "git_sha": "31607d9",
+  "timestamp": "2026-07-06T22:49:43+00:00"
+}
