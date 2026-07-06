@@ -1,0 +1,220 @@
+{
+  "run_id": "ask_20260706T232735914788Z",
+  "kind": "query",
+  "planner": "rule",
+  "autonomy": null,
+  "thresholds_hash": null,
+  "started_at": "2026-07-06T23:27:35.914+00:00",
+  "written_at": "2026-07-06T23:27:35.930+00:00",
+  "n_tool_calls": 6,
+  "tool_calls": [
+    {
+      "seq": 0,
+      "tool": "list_units_by_risk",
+      "args": {
+        "band": "high"
+      },
+      "status": "ok",
+      "output_digest": "ab352bd0173f05f2",
+      "output_preview": {
+        "band": "high",
+        "n": 18,
+        "units": [
+          {
+            "keys": [
+              "last_cycle",
+              "pred_rul",
+              "risk_band",
+              "unit_id"
+            ]
+          },
+          {
+            "keys": [
+              "last_cycle",
+              "pred_rul",
+              "risk_band",
+              "unit_id"
+            ]
+          },
+          {
+            "keys": [
+              "last_cycle",
+              "pred_rul",
+              "risk_band",
+              "unit_id"
+            ]
+          },
+          "… (+15 more)"
+        ],
+        "artifact": "data/processed/test_predictions.csv"
+      },
+      "error": null,
+      "seconds": 0.0064
+    },
+    {
+      "seq": 1,
+      "tool": "get_prediction",
+      "args": {
+        "unit": 81
+      },
+      "status": "ok",
+      "output_digest": "3f1c77f8cfe03095",
+      "output_preview": {
+        "unit_id": 81,
+        "last_cycle": 213,
+        "pred_rul": 6.59,
+        "risk_band": "high",
+        "artifact": "data/processed/test_predictions.csv"
+      },
+      "error": null,
+      "seconds": 0.0025
+    },
+    {
+      "seq": 2,
+      "tool": "get_prediction",
+      "args": {
+        "unit": 34
+      },
+      "status": "ok",
+      "output_digest": "4fe276a6227a82c0",
+      "output_preview": {
+        "unit_id": 34,
+        "last_cycle": 203,
+        "pred_rul": 7.12,
+        "risk_band": "high",
+        "artifact": "data/processed/test_predictions.csv"
+      },
+      "error": null,
+      "seconds": 0.0021
+    },
+    {
+      "seq": 3,
+      "tool": "get_prediction",
+      "args": {
+        "unit": 35
+      },
+      "status": "ok",
+      "output_digest": "ca6fa4cbb3767c51",
+      "output_preview": {
+        "unit_id": 35,
+        "last_cycle": 198,
+        "pred_rul": 9.84,
+        "risk_band": "high",
+        "artifact": "data/processed/test_predictions.csv"
+      },
+      "error": null,
+      "seconds": 0.0014
+    },
+    {
+      "seq": 4,
+      "tool": "get_prediction",
+      "args": {
+        "unit": 76
+      },
+      "status": "ok",
+      "output_digest": "cb27a14bd9a63e76",
+      "output_preview": {
+        "unit_id": 76,
+        "last_cycle": 205,
+        "pred_rul": 10.58,
+        "risk_band": "high",
+        "artifact": "data/processed/test_predictions.csv"
+      },
+      "error": null,
+      "seconds": 0.0013
+    },
+    {
+      "seq": 5,
+      "tool": "get_prediction",
+      "args": {
+        "unit": 31
+      },
+      "status": "ok",
+      "output_digest": "bb764cdff8b01152",
+      "output_preview": {
+        "unit_id": 31,
+        "last_cycle": 196,
+        "pred_rul": 11.76,
+        "risk_band": "high",
+        "artifact": "data/processed/test_predictions.csv"
+      },
+      "error": null,
+      "seconds": 0.0011
+    }
+  ],
+  "gates": [],
+  "cards": [],
+  "claims": [
+    {
+      "text_en": "18 engines in the high-risk band",
+      "source_seq": 0,
+      "tool": "list_units_by_risk",
+      "field": "n",
+      "value": 18
+    },
+    {
+      "text_en": "unit 81 predicted RUL 6.59",
+      "source_seq": 1,
+      "tool": "get_prediction",
+      "field": "pred_rul",
+      "value": 6.59
+    },
+    {
+      "text_en": "unit 34 predicted RUL 7.12",
+      "source_seq": 2,
+      "tool": "get_prediction",
+      "field": "pred_rul",
+      "value": 7.12
+    },
+    {
+      "text_en": "unit 35 predicted RUL 9.84",
+      "source_seq": 3,
+      "tool": "get_prediction",
+      "field": "pred_rul",
+      "value": 9.84
+    }
+  ],
+  "grounding_ok": true,
+  "answer": {
+    "question": "which engines need inspection?",
+    "intent": "inspection",
+    "answer_en": "18 engines are in the high-risk band. Inspect first — the 3 within 10 predicted cycles of end-of-life: unit 81 (6.59 cycles), unit 34 (7.12 cycles), unit 35 (9.84 cycles). Then schedule the remaining high-risk units.",
+    "answer_zh": "共有 18 台发动机处于高风险区间。优先检查——预测剩余寿命在 10 周期以内的 3 台：81 号（6.59 周期）、34 号（7.12 周期）、35 号（9.84 周期）。随后再安排其余高风险机组。",
+    "claims": [
+      {
+        "text_en": "18 engines in the high-risk band",
+        "source_seq": 0,
+        "tool": "list_units_by_risk",
+        "field": "n",
+        "value": 18
+      },
+      {
+        "text_en": "unit 81 predicted RUL 6.59",
+        "source_seq": 1,
+        "tool": "get_prediction",
+        "field": "pred_rul",
+        "value": 6.59
+      },
+      {
+        "text_en": "unit 34 predicted RUL 7.12",
+        "source_seq": 2,
+        "tool": "get_prediction",
+        "field": "pred_rul",
+        "value": 7.12
+      },
+      {
+        "text_en": "unit 35 predicted RUL 9.84",
+        "source_seq": 3,
+        "tool": "get_prediction",
+        "field": "pred_rul",
+        "value": 9.84
+      }
+    ],
+    "citations": [
+      {
+        "artifact": "data/processed/test_predictions.csv",
+        "note": "predicted RUL per unit"
+      }
+    ]
+  }
+}

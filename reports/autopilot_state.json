@@ -1,0 +1,96 @@
+{
+  "run_id": "auto_20260706T232733673143Z",
+  "autonomy": "dry-run",
+  "status": "done",
+  "thresholds_hash": "67943e2d5b7d3853",
+  "cursor": null,
+  "completed_stages": [
+    "s01_ingest",
+    "s02_eda",
+    "s03_preprocess",
+    "s04_features",
+    "s05_model",
+    "s06_select",
+    "s07_predict",
+    "s08_evidence",
+    "s09_diagnose",
+    "s10_eval"
+  ],
+  "decisions": [
+    [
+      "s01_ingest",
+      "ingest_schema",
+      "PASS",
+      null
+    ],
+    [
+      "s02_eda",
+      "eda_sanity",
+      "PASS",
+      null
+    ],
+    [
+      "s03_preprocess",
+      "leakage_canary",
+      "PASS",
+      null
+    ],
+    [
+      "s04_features",
+      "feature_provenance",
+      "PASS",
+      null
+    ],
+    [
+      "s05_model",
+      "model_provenance",
+      "PASS",
+      null
+    ],
+    [
+      "s06_select",
+      "champion_beats_floor",
+      "PASS",
+      null
+    ],
+    [
+      "s07_predict",
+      "prediction_distribution",
+      "PASS",
+      null
+    ],
+    [
+      "s07_predict",
+      "high_risk_triage",
+      "CARD",
+      "high_risk_triage"
+    ],
+    [
+      "s08_evidence",
+      "evidence_completeness",
+      "PASS",
+      null
+    ],
+    [
+      "s09_diagnose",
+      "diagnosis_governance",
+      "PASS",
+      null
+    ],
+    [
+      "s10_eval",
+      "eval_recompute_match",
+      "PASS",
+      null
+    ],
+    [
+      "s10_eval",
+      "report_signoff",
+      "CARD",
+      "report_signoff"
+    ]
+  ],
+  "cards_pending": [],
+  "cards_resolved": [],
+  "updated_at": "2026-07-06T23:27:33.783+00:00"
+}
