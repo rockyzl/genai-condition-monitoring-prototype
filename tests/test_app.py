@@ -249,3 +249,26 @@ def test_chat_card_pinned_and_action_write(hermetic):
     assert json.loads(answered.read_text())["action"] == "schedule_inspection"
     # card morphed to a resolved milestone (no praise-echo reply bubble)
     assert "✓ Confirmed" in _alltext(at)
+
+
+# =============================================================================
+# 7. A bare greeting gets the capability greeting, not the out-of-scope reply
+# =============================================================================
+@pytest.mark.parametrize("lang,greet,out_of_scope", [
+    ("English", "hi", "Out of scope"),
+    ("中文", "你好", "不在本智能体的范围内"),
+])
+def test_chat_greeting_gets_capability_reply(hermetic, lang, greet, out_of_scope):
+    _write_fixtures(hermetic, with_card=False)
+    at = AppTest.from_file(APP_FILE, default_timeout=90).run()
+    _radio_with(at, "English").set_value(lang).run()
+    at.chat_input[0].set_value(greet).run()
+    assert not at.exception, at.exception
+    # the greeting was routed to the capability greeting bubble (not the fallback)
+    chat = at.session_state["chat"]
+    assert chat[-2]["role"] == "user" and chat[-2]["text"] == greet
+    assert chat[-1]["role"] == "agent" and chat[-1].get("kind") == "text"
+    assert chat[-1]["en"] == app.T["English"]["greeting"]
+    assert out_of_scope not in _alltext(at)
+    # anchoring guard: a greeting + a real request still routes to the request
+    assert app._detect_intent("hi, diagnose unit 81")[0] == "query"

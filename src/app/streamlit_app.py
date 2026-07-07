@@ -69,6 +69,15 @@ _HOW_RE = re.compile(
     re.IGNORECASE,
 )
 
+# A bare greeting (whole input) gets the capability greeting, not the
+# out-of-scope reply. Anchored so "hi, diagnose unit 81" still routes to intent.
+_GREET_RE = re.compile(
+    r"^\s*(hi|hello|hey|yo|hiya|sup|hi there|hello there|"
+    r"good (morning|afternoon|evening)|你好|您好|嗨|哈喽|哈罗|你好呀)"
+    r"[\s!.,?？！。~，]*$",
+    re.IGNORECASE,
+)
+
 # Free-text that means "run the full pipeline" (vs. the read-only query intents).
 _RUN_RE = re.compile(
     r"(run\b|autopilot|whole fleet|entire fleet|full (analysis|run|pipeline|sweep)|"
@@ -1275,6 +1284,8 @@ def _detect_intent(text: str) -> tuple[str, str]:
     from src.agent.planner import make_planner
 
     t = text or ""
+    if _GREET_RE.match(t):
+        return "greeting", t
     if _HOW_RE.search(t):
         return "howitworks", t
     if _RUN_RE.search(t):
@@ -1337,7 +1348,9 @@ def _handle_user_intent(st, cfg, tt, display_text, intent_text=None,
     intent_text = intent_text if intent_text is not None else display_text
     st.session_state["chat"].append({"role": "user", "text": display_text})
     kind, payload = _detect_intent(intent_text)
-    if kind == "howitworks":
+    if kind == "greeting":  # a bare greeting → the capability greeting, not "out of scope"
+        st.session_state["chat"].append(_greeting_msg())
+    elif kind == "howitworks":
         st.session_state["chat"].append({"role": "agent", "kind": "howitworks"})
     elif kind == "run":
         if running:  # a run is in flight — queue, never launch concurrently
