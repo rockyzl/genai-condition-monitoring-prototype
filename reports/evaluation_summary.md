@@ -46,11 +46,11 @@ Automated evaluation of the GenAI-assisted condition-monitoring prototype. Indep
 
 Governs the latest **agent** run (autopilot/query) — the checks that keep the deterministic pipeline agent accountable, evaluated over real run artifacts (trace, journal, decision inbox, run state).
 
-- Latest agent run: `auto_20260706T235818124979Z`  ·  autonomy: **gated**
+- Latest agent run: `auto_20260707T022228427627Z`  ·  autonomy: **gated**
 
 | Check | Result | Detail |
 |-------|--------|--------|
-| Recommendation → tool-output grounding | ✅ PASS | 4/4 claims in `agent_trace_ask_20260706T235820674489Z.json` re-derive from a live tool output |
+| Recommendation → tool-output grounding | ✅ PASS | 4/4 claims in `agent_trace_ask_20260707T022230490666Z.json` re-derive from a live tool output |
 | Card signal → artifact reproducibility | ✅ PASS | 9/9 signals across 3 card(s) re-derive from their artifact+field |
 | No unrecorded stage skips | ✅ PASS | 10/10 stages accounted for in run state + provenance |
 | Gate outcomes journalled + consistent | ✅ PASS | 2 raised / 1 resolved / 0 halt event(s) consistent with run state |

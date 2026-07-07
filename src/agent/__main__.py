@@ -43,11 +43,12 @@ def _print_card(card: dict, indent: str = "  ") -> None:
 
 
 def _cmd_run(args) -> int:
+    # The autopilot supervisor is the hand-written native engine only; LangGraph
+    # is deliberately NOT wired into the pipeline/supervisor (see
+    # docs/langgraph-mapping.md). It lives on the ask path alone.
     cfg = PipelineConfig.load(args.config)
     pilot = Autopilot(
-        cfg,
-        autonomy=args.autonomy,
-        yes_safe_defaults=args.yes_safe_defaults,
+        cfg, autonomy=args.autonomy, yes_safe_defaults=args.yes_safe_defaults,
         force=args.force,
     )
     report = pilot.run()
@@ -105,13 +106,24 @@ def _cmd_run(args) -> int:
 
 def _cmd_ask(args) -> int:
     cfg = PipelineConfig.load(args.config)
+    engine = getattr(args, "engine", "native")
     try:
-        result = answer_query(cfg, args.query, planner_kind=args.planner)
+        if engine == "langgraph":
+            try:
+                from src.agent.graph import answer_query_langgraph
+            except ImportError as exc:
+                raise SystemExit(
+                    f"--engine langgraph requires langgraph: {exc}\n"
+                    "Install dev deps: .venv/bin/pip install -r requirements-agent.txt"
+                )
+            result = answer_query_langgraph(cfg, args.query, planner_kind=args.planner)
+        else:
+            result = answer_query(cfg, args.query, planner_kind=args.planner)
     except PlannerNotConfigured as exc:
         print(f"[ask] {exc}", file=sys.stderr)
         return 3
     ans = result["answer"]
-    print(f"Q: {ans['question']}")
+    print(f"Q: {ans['question']}  [engine={engine}]")
     print(f"\n{ans['answer_en']}")
     print(f"\n{ans['answer_zh']}")
     if ans.get("citations"):
@@ -149,6 +161,9 @@ def build_parser() -> argparse.ArgumentParser:
     ask_p.add_argument("query", help="e.g. 'which engines need inspection?'")
     ask_p.add_argument("--planner", choices=["rule", "llm"], default="rule",
                        help="planner backend (llm is a not-configured stub)")
+    ask_p.add_argument("--engine", choices=["native", "langgraph"], default="native",
+                       help="orchestration engine (default: native; langgraph runs "
+                       "the same tools through a ToolNode tool-calling loop)")
     ask_p.add_argument("--config", metavar="PATH", help="path to pipeline.yaml")
     return parser
 

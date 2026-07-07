@@ -1,0 +1,13 @@
+# Optional agent dependency — the LangGraph ask-path engine ONLY.
+#
+# LangGraph is used narrowly, on the deterministic tool-calling (ask) path
+# (src/agent/graph.py, `ask --engine langgraph`). It is NOT wired into the
+# pipeline or the autopilot supervisor (rationale: docs/langgraph-mapping.md).
+# The base install (requirements.txt) and the Streamlit Space never import it, so
+# they stay lean. Install only to run the LangGraph ask engine:
+#
+#     .venv/bin/pip install -r requirements-agent.txt
+#
+# The loop runs key-free with the deterministic rule planner — no model in the
+# loop; the LLM planner is the documented future occupant of the same loop.
+langgraph>=1.0,<2.0

@@ -73,9 +73,15 @@ ideas and discipline, not code**:
   anomaly detection, not the benchmark itself.
 - **NASA PCoE Data Repository** — authoritative data source and citation.
 
-The pipeline and agent layers use **no orchestration framework** (no Airflow,
-Prefect, or LangChain) — the DAG runner, provenance, planner, and supervisor are
-hand-written for auditability.
+The **pipeline supervisor remains hand-written** (no Airflow, Prefect, or
+LangChain orchestrating the DAG; the runner, provenance, planner, and supervisor
+are hand-rolled for auditability — rationale in `docs/langgraph-mapping.md`).
+**LangGraph is used narrowly on the deterministic tool-calling path only**
+(`src/agent/graph.py`, `--engine langgraph` on `ask`): a `StateGraph` + `ToolNode`
+over the same registry tools, driven deterministically by the rule planner (no
+model in the loop; the LLM planner is the documented future occupant of that same
+loop). It is a dev-only dependency (`requirements-agent.txt`); the base install
+and the Streamlit Space are untouched.
 
 ## What Is Original
 
