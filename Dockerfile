@@ -6,7 +6,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN useradd -m -u 1000 user
+RUN useradd -m -u 1000 user && chown user:user /app
 COPY --chown=user:user . /app
 USER user
 ENV HOME=/home/user \
