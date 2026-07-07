@@ -37,7 +37,7 @@ call on every boot.
 
 ## A. Hugging Face Spaces (primary)
 
-HF Spaces still supports a native Streamlit SDK (`sdk: streamlit`). It serves on
+HF Spaces still supports a native Streamlit SDK (`sdk: docker (HF discontinued the native streamlit SDK for new Spaces; we ship a standard streamlit-in-docker container)`). It serves on
 port **8501 only** (do not override the port in a `config.toml`).
 
 1. **Create the Space.** <https://huggingface.co/new-space> → pick **Streamlit**
@@ -54,7 +54,7 @@ port **8501 only** (do not override the port in a `config.toml`).
    emoji: 🛠️
    colorFrom: blue
    colorTo: indigo
-   sdk: streamlit
+   sdk: docker (HF discontinued the native streamlit SDK for new Spaces; we ship a standard streamlit-in-docker container)
    sdk_version: "1.40.0"   # keep HF's pre-filled latest-supported value
    app_file: streamlit_app.py
    pinned: false

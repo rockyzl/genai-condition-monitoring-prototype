@@ -3,11 +3,8 @@ title: Condition Monitoring Agent
 emoji: 🛠️
 colorFrom: blue
 colorTo: indigo
-sdk: streamlit
-sdk_version: "1.40.0"   # ← replace with the value HF pre-fills when you create the
-                        #    Space (its latest supported Streamlit). Tested locally
-                        #    on 1.59.0; the app targets Streamlit >= 1.30.
-app_file: streamlit_app.py
+sdk: docker
+app_port: 8501
 pinned: false
 suggested_hardware: cpu-basic
 short_description: Deterministic RUL pipeline + HITL decision agent on NASA C-MAPSS
