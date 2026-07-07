@@ -73,15 +73,21 @@ ideas and discipline, not code**:
   anomaly detection, not the benchmark itself.
 - **NASA PCoE Data Repository** — authoritative data source and citation.
 
-The **pipeline supervisor remains hand-written** (no Airflow, Prefect, or
-LangChain orchestrating the DAG; the runner, provenance, planner, and supervisor
-are hand-rolled for auditability — rationale in `docs/langgraph-mapping.md`).
-**LangGraph is used narrowly on the deterministic tool-calling path only**
-(`src/agent/graph.py`, `--engine langgraph` on `ask`): a `StateGraph` + `ToolNode`
-over the same registry tools, driven deterministically by the rule planner (no
-model in the loop; the LLM planner is the documented future occupant of that same
-loop). It is a dev-only dependency (`requirements-agent.txt`); the base install
-and the Streamlit Space are untouched.
+The pipeline and the **default (native) agent engine** use **no orchestration
+framework** (no Airflow, Prefect, or LangChain) — the DAG runner, provenance,
+planner, and supervisor are hand-written for auditability, and remain the default.
+A **second, optional LangGraph engine** (`src/agent/langgraph_engine.py`,
+`--engine langgraph`, dev-only dependency in `requirements-agent.txt`) implements
+the *same* governed workflow — the same registry tools, gate evaluations, decision
+cards, and grounded answerer — as a `StateGraph` with typed state, a
+`ToolNode` tool-calling loop, and `interrupt`-based decision gates. It is
+deterministic (no LLM in the loop) and provably equivalent: native and LangGraph
+produce identical decisions and cards on the same inputs+seed (parity test), and
+**both engines pass the same autonomy-governance evaluation** (Section D). What we
+deliberately did *not* hand to the framework — byte-identical determinism
+(provenance hashes) and crash-safe cross-process HITL resume (inbox files) —
+stays in the native layer; the rationale and the concept→primitive mapping are in
+`docs/langgraph-engine.md`.
 
 ## What Is Original
 

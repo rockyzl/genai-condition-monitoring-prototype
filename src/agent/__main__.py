@@ -42,19 +42,31 @@ def _print_card(card: dict, indent: str = "  ") -> None:
         print(f"{indent}      → {a['consequence_en']}")
 
 
+def _make_autopilot(args, cfg):
+    """Build the requested engine. LangGraph is imported lazily so the base
+    install (no langgraph) runs the native engine unaffected."""
+    kwargs = dict(autonomy=args.autonomy, yes_safe_defaults=args.yes_safe_defaults,
+                  force=args.force)
+    if getattr(args, "engine", "native") == "langgraph":
+        try:
+            from src.agent.langgraph_engine import LangGraphAutopilot
+        except ImportError as exc:
+            raise SystemExit(
+                f"--engine langgraph requires langgraph: {exc}\n"
+                "Install dev deps: .venv/bin/pip install -r requirements-agent.txt"
+            )
+        return LangGraphAutopilot(cfg, **kwargs)
+    return Autopilot(cfg, **kwargs)
+
+
 def _cmd_run(args) -> int:
-    # The autopilot supervisor is the hand-written native engine only; LangGraph
-    # is deliberately NOT wired into the pipeline/supervisor (see
-    # docs/langgraph-mapping.md). It lives on the ask path alone.
     cfg = PipelineConfig.load(args.config)
-    pilot = Autopilot(
-        cfg, autonomy=args.autonomy, yes_safe_defaults=args.yes_safe_defaults,
-        force=args.force,
-    )
+    pilot = _make_autopilot(args, cfg)
     report = pilot.run()
 
-    print(f"[autopilot] run {report.run_id}  autonomy={report.autonomy}  "
-          f"status={report.status.upper()}")
+    engine = getattr(args, "engine", "native")
+    print(f"[autopilot] run {report.run_id}  engine={engine}  "
+          f"autonomy={report.autonomy}  status={report.status.upper()}")
     print(f"[autopilot] gate thresholds hash: {report.thresholds_hash}")
     for row in report.stages:
         gates = ", ".join(
@@ -110,7 +122,7 @@ def _cmd_ask(args) -> int:
     try:
         if engine == "langgraph":
             try:
-                from src.agent.graph import answer_query_langgraph
+                from src.agent.langgraph_engine import answer_query_langgraph
             except ImportError as exc:
                 raise SystemExit(
                     f"--engine langgraph requires langgraph: {exc}\n"
@@ -155,6 +167,9 @@ def build_parser() -> argparse.ArgumentParser:
                        "(never applies to sign-off)")
     run_p.add_argument("--force", action="store_true",
                        help="ignore provenance; re-execute every stage")
+    run_p.add_argument("--engine", choices=["native", "langgraph"], default="native",
+                       help="orchestration engine (default: native hand-written "
+                       "supervisor; langgraph runs the same governed workflow)")
     run_p.add_argument("--config", metavar="PATH", help="path to pipeline.yaml")
 
     ask_p = sub.add_parser("ask", help="query: a grounded, cited answer")

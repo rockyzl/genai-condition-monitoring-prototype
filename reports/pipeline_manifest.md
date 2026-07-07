@@ -1,8 +1,8 @@
 # Pipeline Run Manifest
 
 - Run id: `run_b`  ·  stages executed: **1** (skipped: **1**)
-- Seed: **42**  ·  dataset: **FD001**  ·  RUL cap: **125**  ·  git: `a8c732d`
-- Journal: `/tmp/pytest-of-lu2/pytest-53/test_run_stage_then_skip_secon0/journal.jsonl` (append-only NDJSON, one line per step event)
+- Seed: **42**  ·  dataset: **FD001**  ·  RUL cap: **125**  ·  git: `6a0a0a1`
+- Journal: `/tmp/pytest-of-lu2/pytest-55/test_run_stage_then_skip_secon0/journal.jsonl` (append-only NDJSON, one line per step event)
 
 ## Stage DAG
 
