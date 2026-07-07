@@ -23,6 +23,8 @@ then a fleet-wide risk table. Every number traces to a named artifact; there is
 no LLM in the loop. Regenerate with `.venv/bin/python scripts/record_demo.py`
 (see [`docs/media/README.md`](docs/media/README.md)).
 
+> **Project status / what is done:** see [docs/status.md](docs/status.md).
+
 ## What This Is
 
 A small but complete, end-to-end prototype that ingests sensor time-series
