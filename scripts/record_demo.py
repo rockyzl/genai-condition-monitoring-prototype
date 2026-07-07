@@ -97,6 +97,7 @@ def start_app() -> subprocess.Popen:
          "--server.headless", "true", "--server.port", str(PORT),
          "--server.runOnSave", "false", "--browser.gatherUsageStats", "false"],
         cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        start_new_session=True,  # own process group so we can reap children
     )
     for _ in range(60):
         try:
@@ -109,10 +110,13 @@ def start_app() -> subprocess.Popen:
 
 
 def stop_app(proc: subprocess.Popen) -> None:
-    with contextlib.suppress(ProcessLookupError):
-        proc.send_signal(signal.SIGTERM)
+    # Streamlit spawns children; kill the whole process group, then wait.
+    with contextlib.suppress(Exception):
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
     with contextlib.suppress(Exception):
         proc.wait(timeout=10)
+    with contextlib.suppress(Exception):
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
 
 
 # --------------------------------------------------------------------------- #
@@ -145,7 +149,7 @@ def drive(page) -> None:
     # Streamlit boots asynchronously; wait for the greeting/badge.
     _text(page, "scan the fleet").wait_for(timeout=45000)
     page.wait_for_timeout(1000)
-    _show(page, _text(page, "No LLM"), 5000)                       # 1) landing
+    _show(page, _text(page, "No LLM"), 7000)                       # 1) landing
 
     _btn(page, "Scan fleet").click()                               # 2) intent
     _text(page, "Run it").wait_for(timeout=15000)
@@ -155,7 +159,7 @@ def drive(page) -> None:
     _text(page, "view steps").wait_for(timeout=45000)              # 3) watch-it-work
     page.wait_for_timeout(1500)
     _expand(page, "view steps")                                    #    expand steps
-    _show(page, _text(page, "view steps"), 7000)
+    _show(page, _text(page, "view steps"), 10000)
 
     _text(page, "need inspection first").wait_for(timeout=45000)   # 4) decision card
     _show(page, _text(page, "need inspection first"), 3500)
@@ -163,7 +167,7 @@ def drive(page) -> None:
     page.wait_for_timeout(5000)
     _btn(page, "Schedule inspection").click()                      #    take the action
     _text(page, "Confirmed").wait_for(timeout=20000)
-    _show(page, _text(page, "Confirmed"), 5000)
+    _show(page, _text(page, "Confirmed"), 8000)
 
     _show(page, _text(page, "scored 100 engines"), 3500)           # 5) done + free-text
     box = page.get_by_placeholder(re.compile("Type a request", re.I))
@@ -171,13 +175,14 @@ def drive(page) -> None:
     box.fill("diagnose unit 81")
     box.press("Enter")
     _text(page, "Asset 81").wait_for(timeout=30000)
-    _show(page, _text(page, "Asset 81"), 8000)
+    _show(page, _text(page, "Asset 81"), 12000)                     #    grounded answer
 
-    _show(page, _text(page, "No LLM"), 3000)                       # 6) close
-    with contextlib.suppress(Exception):                          #    optional dashboard
-        page.get_by_role("radio", name=re.compile("Autopilot dashboard")).click()
+    # 6) closing capstone: switch to the Autopilot dashboard fleet table
+    with contextlib.suppress(Exception):
+        page.get_by_text(re.compile("Autopilot dashboard")).first.click()
         _text(page, "Fleet view").wait_for(timeout=15000)
-        _show(page, _text(page, "Fleet view"), 3500)
+        page.wait_for_timeout(1200)
+        _show(page, _text(page, "Fleet view"), 8000)
 
 
 def record() -> Path:

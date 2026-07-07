@@ -8,6 +8,21 @@
 > data as a proxy. **Not production-ready.** Caterpillar is named here only as
 > the target-role inspiration for the exercise.
 
+## 90-second demo
+
+The flagship **Agent Chat** flow, end to end (~68s):
+
+<video src="docs/media/demo.mp4" controls muted width="100%"></video>
+
+▶ **[Watch the demo](docs/media/demo.mp4)** (mp4, ~1 MB) · [webm](docs/media/demo.webm)
+
+**Scan fleet** → the deterministic 10-stage pipeline runs live → a grounded
+**decision card** ("3 engines need inspection first — units 81, 34, 35") →
+**approve it** → ask *"diagnose unit 81"* and get a **cited, grounded answer**,
+then a fleet-wide risk table. Every number traces to a named artifact; there is
+no LLM in the loop. Regenerate with `.venv/bin/python scripts/record_demo.py`
+(see [`docs/media/README.md`](docs/media/README.md)).
+
 ## What This Is
 
 A small but complete, end-to-end prototype that ingests sensor time-series

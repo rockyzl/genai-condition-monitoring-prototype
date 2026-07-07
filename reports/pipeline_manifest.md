@@ -1,8 +1,8 @@
 # Pipeline Run Manifest
 
 - Run id: `run_b`  ·  stages executed: **1** (skipped: **1**)
-- Seed: **42**  ·  dataset: **FD001**  ·  RUL cap: **125**  ·  git: `6a0a0a1`
-- Journal: `/tmp/pytest-of-lu2/pytest-55/test_run_stage_then_skip_secon0/journal.jsonl` (append-only NDJSON, one line per step event)
+- Seed: **42**  ·  dataset: **FD001**  ·  RUL cap: **125**  ·  git: `103a3c4`
+- Journal: `/tmp/pytest-of-lu2/pytest-58/test_run_stage_then_skip_secon0/journal.jsonl` (append-only NDJSON, one line per step event)
 
 ## Stage DAG
 
@@ -41,7 +41,7 @@ flowchart TD
 
 **目的.** 后面所有环节都按传感器名字来引用，先在这里一次性把固定宽度的文本解析好，避免列错位却没人发现。
 
-- Observed: rows **n/a**, outputs **159 B**, time **0.000s**
+- Observed: rows **n/a**, outputs **159 B**, time **0.001s**
 - Inputs: `data/raw/CMAPSSData/train_FD001.txt`, `data/raw/CMAPSSData/test_FD001.txt`, `data/raw/CMAPSSData/RUL_FD001.txt`
 - Outputs: `data/processed/ingest_manifest.json`
 - Assumptions:
