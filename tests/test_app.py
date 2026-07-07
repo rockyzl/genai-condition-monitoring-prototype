@@ -136,23 +136,31 @@ def _radio_with(at, option):
     raise AssertionError(f"no radio has option {option!r}")
 
 
+def _to_mode(at, mode):
+    _radio_with(at, mode).set_value(mode).run()
+
+
 # =============================================================================
-# 1. Mode switch renders both modes
+# 1. Mode switch renders all three modes (default = chat)
 # =============================================================================
-def test_mode_switch_renders_both_modes(hermetic):
+def test_mode_switch_renders_all_modes(hermetic):
     _write_fixtures(hermetic, with_card=False)
     at = AppTest.from_file(APP_FILE, default_timeout=90).run()
     assert not at.exception, at.exception
-    # default = autopilot: inbox header present
+    # default = Agent Chat: greeting present (capability opener, no persona)
+    assert "scan the fleet" in _alltext(at)
+    # dashboard
+    _to_mode(at, app.MODE_DASH)
+    assert not at.exception, at.exception
     assert "Decision Inbox" in _alltext(at)
-    # switch to teaching mode via the mode radio
-    _radio_with(at, app.MODE_TEACH).set_value(app.MODE_TEACH).run()
+    # teaching
+    _to_mode(at, app.MODE_TEACH)
     assert not at.exception, at.exception
     assert "① Step 1 — Pick an engine" in _alltext(at)
 
 
 # =============================================================================
-# 2. Inbox renders a fixture card with actions (EN + 中文, no crash)
+# 2. Dashboard inbox renders a fixture card with actions (EN + 中文, no crash)
 # =============================================================================
 @pytest.mark.parametrize("lang,verdict_key,action_label", [
     ("English", "verdict_en", "Schedule inspection for units 39, 57, 81"),
@@ -162,25 +170,25 @@ def test_inbox_renders_fixture_card(hermetic, lang, verdict_key, action_label):
     _write_fixtures(hermetic, with_card=True)
     at = AppTest.from_file(APP_FILE, default_timeout=90).run()
     _radio_with(at, "English").set_value(lang).run()  # language
+    _to_mode(at, app.MODE_DASH)
     assert not at.exception, at.exception
     text = _alltext(at)
     assert FIXTURE_CARD[verdict_key] in text          # verdict headline
     assert "18" in text                                # done-banner: flagged 18 high-risk
     labels = [getattr(b, "label", "") for b in at.button]
     assert any(action_label in lbl for lbl in labels)  # action button present
-    # a signal (incl. the uncertainty caveat) rendered
     assert "high-risk" in text or "高风险" in text
 
 
 # =============================================================================
-# 3. Pressing an action writes the answered file (schema: card_id, action_id...)
+# 3. Dashboard action press writes the answered file (schema: card_id, action_id…)
 # =============================================================================
 def test_action_press_writes_answered_file(hermetic):
     _write_fixtures(hermetic, with_card=True)
     at = AppTest.from_file(APP_FILE, default_timeout=90).run()
+    _to_mode(at, app.MODE_DASH)
     assert not at.exception, at.exception
-    key = f"act_{FIXTURE_CARD['id']}_schedule_inspection"
-    _click(at, key)
+    _click(at, f"act_{FIXTURE_CARD['id']}_schedule_inspection")
     assert not at.exception, at.exception
     answered = hermetic / "autopilot_inbox" / "answered" / f"{FIXTURE_CARD['id']}.json"
     assert answered.exists(), "answered card file was not written"
@@ -189,3 +197,55 @@ def test_action_press_writes_answered_file(hermetic):
     assert data["action_id"] == "schedule_inspection"
     assert data["action"] == "schedule_inspection"  # what the supervisor reads
     assert data["actor"] == "ui"
+
+
+# =============================================================================
+# 4. Chat mode: greeting (capability opener) + trust badge + suggestion chips
+# =============================================================================
+def test_chat_greeting_and_chips(hermetic):
+    _write_fixtures(hermetic, with_card=False)
+    at = AppTest.from_file(APP_FILE, default_timeout=90).run()
+    assert not at.exception, at.exception
+    text = _alltext(at)
+    assert "scan the fleet" in text                        # capability greeting
+    assert "No LLM" in text                                # persistent trust badge
+    assert "list_units_by_risk" in text                    # grounded showcase (never empty)
+    labels = [getattr(b, "label", "") for b in at.button]
+    assert any("Scan fleet" in l for l in labels)
+    assert any("Diagnose one" in l for l in labels)
+    assert any("How it works" in l for l in labels)
+
+
+# =============================================================================
+# 5. Clicking the fleet chip yields the verbatim plan-preview with a Start button
+# =============================================================================
+def test_chat_plan_preview_after_intent(hermetic):
+    _write_fixtures(hermetic, with_card=False)
+    at = AppTest.from_file(APP_FILE, default_timeout=90).run()
+    _click(at, "chip_chip_fleet")
+    assert not at.exception, at.exception
+    text = _alltext(at)
+    assert "load 100 engines" in text and "Run it?" in text   # verbatim plan preview
+    labels = [getattr(b, "label", "") for b in at.button]
+    assert any("Start" in l for l in labels)                  # start button appeared
+
+
+# =============================================================================
+# 6. A fixture card renders as a PINNED chat card; its action writes the answer
+# =============================================================================
+def test_chat_card_pinned_and_action_write(hermetic):
+    _write_fixtures(hermetic, with_card=True)
+    at = AppTest.from_file(APP_FILE, default_timeout=90)
+    at.session_state["chat_run_active"] = True  # simulate an in-progress run's card
+    at.run()
+    assert not at.exception, at.exception
+    text = _alltext(at)
+    assert FIXTURE_CARD["verdict_en"] in text             # card rendered in chat
+    assert "decision(s) pending" in text                  # pinned-card strip
+    _click(at, f"chatact_{FIXTURE_CARD['id']}_schedule_inspection")
+    assert not at.exception, at.exception
+    answered = hermetic / "autopilot_inbox" / "answered" / f"{FIXTURE_CARD['id']}.json"
+    assert answered.exists()
+    assert json.loads(answered.read_text())["action"] == "schedule_inspection"
+    # card morphed to a resolved milestone (no praise-echo reply bubble)
+    assert "✓ Confirmed" in _alltext(at)

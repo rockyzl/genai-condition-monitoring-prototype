@@ -52,8 +52,30 @@ from src.rag.assistant import diagnose  # noqa: E402
 from src.rag.retriever import Retriever  # noqa: E402
 
 # Top-level mode labels (bilingual, fixed — this is the mode switch itself).
-MODE_AUTO = "🤖 Autopilot / 自动巡检"
+MODE_CHAT = "💬 Agent Chat / 对话巡检"
+MODE_DASH = "📊 Autopilot dashboard / 巡检看板"
 MODE_TEACH = "🎓 Teaching mode / 教学模式"
+
+# Chip label -> canonical planner-friendly intent text.
+CHIPS = [
+    ("chip_fleet", "run the whole fleet"),
+    ("chip_diag", "diagnose unit 81"),
+    ("chip_how", "how it works"),
+]
+
+_HOW_RE = re.compile(
+    r"(how (do|does) (it|you|this) work|how it works|what (do|can) you do|"
+    r"怎么工作|怎么运作|如何工作|你能做|能做什么|工作原理)",
+    re.IGNORECASE,
+)
+
+# Free-text that means "run the full pipeline" (vs. the read-only query intents).
+_RUN_RE = re.compile(
+    r"(run\b|autopilot|whole fleet|entire fleet|full (analysis|run|pipeline|sweep)|"
+    r"fleet (run|scan|sweep|inspection|analysis)|巡检|整个机队|全机队|"
+    r"跑(一遍|全程|管线|流程|完|一下))",
+    re.IGNORECASE,
+)
 
 _CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫"
 BAND_HEX = {"high": "#c0392b", "medium": "#e67e22", "low": "#27ae60"}
@@ -106,6 +128,60 @@ T = {
             "output is advisory and requires review by a qualified human."
         ),
         "mode_label": "Mode",
+        # ---------- Agent Chat ----------
+        "chat_badge": "Deterministic · Grounded · No LLM",
+        "chat_intro": (
+            "This agent runs the condition-monitoring pipeline and answers fleet "
+            "questions. Try: scan the fleet, diagnose one engine, or how it works."
+        ),
+        "greeting": (
+            "Hi — I can scan the fleet, diagnose one engine, or explain how I "
+            "work. What do you need?"
+        ),
+        "showcase": (
+            "Example — ran list_units_by_risk: **{n} engines high-risk**; inspect "
+            "first units **{ids}** (predicted RUL ≤{cap} cycles)."
+        ),
+        "showcase_src": "test_predictions.csv · count:risk_band=high",
+        "chip_fleet": "🛰 Scan fleet",
+        "chip_diag": "🩺 Diagnose one",
+        "chip_how": "⚙️ How it works?",
+        "chat_input_ph": "Type a request…  (e.g. diagnose unit 81)",
+        "chat_reset": "🗑 Reset chat",
+        "howitworks": (
+            "Runs a fixed **10-stage** pipeline (load → clean → features → score "
+            "→ select → predict → evidence → diagnose → eval), deterministic and "
+            "seed-fixed. Every number traces to a named artifact; every "
+            "recommendation cites a knowledge-base section. No LLM in the loop."
+        ),
+        "plan_preview": (
+            "Plan: load 100 engines → clean sensors → score life → rank by risk → "
+            "prep evidence for the ones that need you. ~10s, read-only, no work "
+            "orders sent. Run it?"
+        ),
+        "chat_btn_start": "▶ Start",
+        "chat_btn_dry": "Adjust scope → dry-run",
+        "chat_starting": "Started the full analysis (gated, read-only).",
+        "chat_dry_starting": "Started a dry-run — reports what would happen, raises no decisions.",
+        "run_progress_running": "Running the pipeline…  current: {stage}",
+        "run_cache_reuse": "{n} steps reused cache",
+        "run_done_expander": "✓ Done · view steps",
+        "chat_fallback": (
+            "Out of scope for this agent. It can: **scan the fleet**, **diagnose "
+            "an engine** (e.g. 'diagnose unit 81'), or **explain how it works**."
+        ),
+        "chat_tools_label": "🔧 tools",
+        "chat_grounded": "grounded — trace",
+        "chat_citations": "Citations",
+        "decision_pending": "{n} decision(s) pending ↓",
+        "why_expander": "why?",
+        "chat_resolved": "✓ Confirmed · {act}",
+        "skip_results": "⏭ Skip to results",
+        "fail_step": "Step {stage} failed. Nothing was changed.",
+        "fail_retry": "Retry",
+        "fail_details": "View details",
+        "queued_run": "Queued — will run after the current pass.",
+        "chat_done_note": "Every card's signals are grounded in named artifacts; nothing is invented.",
         # ---------- Autopilot page ----------
         "ap_intro": (
             "The agent does the heavy lifting — ingest → model → predict → "
@@ -365,6 +441,57 @@ T = {
             "独立研究原型，使用 NASA 公开模拟数据，与任何设备制造商无关。"
         ),
         "mode_label": "模式",
+        # ---------- Agent Chat ----------
+        "chat_badge": "确定性 · 有据可查 · 无 LLM",
+        "chat_intro": (
+            "本智能体运行状态监测管道并回答机队问题。可以试试：扫机队、诊断一台、"
+            "或看它怎么工作。"
+        ),
+        "greeting": (
+            "你好——我可以扫机队、诊断某一台、或解释我怎么工作。你想做啥？"
+        ),
+        "showcase": (
+            "示例——运行 list_units_by_risk：**{n} 台高风险**；优先检查 "
+            "**{ids}** 号（预测剩余寿命 ≤{cap} 周期）。"
+        ),
+        "showcase_src": "test_predictions.csv · count:risk_band=high",
+        "chip_fleet": "🛰 扫描机队",
+        "chip_diag": "🩺 诊断一台",
+        "chip_how": "⚙️ 怎么工作的?",
+        "chat_input_ph": "输入一个请求……（比如 diagnose unit 81）",
+        "chat_reset": "🗑 清空对话",
+        "howitworks": (
+            "运行一条固定的 **10 阶段** 管道（读入 → 清理 → 特征 → 打分 → 选型 → "
+            "预测 → 证据 → 诊断 → 评测），确定、种子固定。每个数字都能追到具名产物，"
+            "每条建议都引用知识库出处。回路里没有 LLM。"
+        ),
+        "plan_preview": (
+            "计划：载入 100 台 → 清理 → 算寿命 → 按风险排序 → 给需你拍板的备证据。"
+            "约 10 秒，只读，不发工单。跑吗？"
+        ),
+        "chat_btn_start": "开始 ▶",
+        "chat_btn_dry": "改范围→dry-run",
+        "chat_starting": "已开始完整分析（把关模式，只读）。",
+        "chat_dry_starting": "已开始试运行——只报告流程会怎么走，不产生决策。",
+        "run_progress_running": "正在跑管线……当前：{stage}",
+        "run_cache_reuse": "{n} 步复用了缓存",
+        "run_done_expander": "✓ 完成 · 查看步骤",
+        "chat_fallback": (
+            "这个不在本智能体的范围内。它能：**扫机队**、"
+            "**诊断某台发动机**（比如 “diagnose unit 81”）、或**解释它怎么工作**。"
+        ),
+        "chat_tools_label": "🔧 工具",
+        "chat_grounded": "有据可查 — 追踪",
+        "chat_citations": "引用",
+        "decision_pending": "{n} 个决策待办 ↓",
+        "why_expander": "为什么?",
+        "chat_resolved": "✓ 已确认 · {act}",
+        "skip_results": "⏭ 跳到结果",
+        "fail_step": "{stage} 步失败。没改动任何东西。",
+        "fail_retry": "重试",
+        "fail_details": "查看细节",
+        "queued_run": "已排队——本次跑完再运行。",
+        "chat_done_note": "每张卡片的依据都锚定在具名的产物上，绝不编造。",
         # ---------- Autopilot page ----------
         "ap_intro": (
             "智能体把重活干完——读数→建模→预测→总结——只把最关键的信号浓缩成一个"
@@ -1125,6 +1252,387 @@ def _teaching_mode(st, plt, pd, cfg, tt, lang, pv) -> None:
 
 
 # =============================================================================
+# Agent Chat — a conversational rendering layer over the SAME machinery
+# (rule planner + query orchestrator + autopilot subprocess + journal + inbox).
+# Zero new agent logic lives here.
+# =============================================================================
+def _canonical(text: str) -> str:
+    """Rendering-layer input normalisation only: map common Chinese phrasings to
+    the shared rule planner's canonical English. No agent logic."""
+    t = (text or "").strip()
+    m = re.search(r"(\d{1,4})\s*号", t)
+    if m and ("诊断" in t or "分析" in t) and "巡检" not in t:
+        return f"diagnose unit {m.group(1)}"
+    if "哪些" in t and ("检查" in t or "维护" in t):
+        return "which engines need inspection?"
+    return t
+
+
+def _detect_intent(text: str) -> tuple[str, str]:
+    """Classify chat input: 'howitworks', 'run' (full pipeline), 'query'
+    (read-only ask), or 'unknown' — reusing the shared rule planner for the
+    query/unknown split. Out-of-scope input falls to 'unknown' (bounded menu)."""
+    from src.agent.planner import make_planner
+
+    t = text or ""
+    if _HOW_RE.search(t):
+        return "howitworks", t
+    if _RUN_RE.search(t):
+        return "run", t
+    canon = _canonical(t)
+    if make_planner("rule").plan(canon):
+        return "query", canon
+    return "unknown", t
+
+
+def _tools_line(canon: str) -> str:
+    from src.agent.planner import make_planner
+
+    names: list[str] = []
+    for c in make_planner("rule").plan(canon):
+        names.append(c.tool)
+        names.extend(f"(fan-out) {ft}" for ft in c.fan_out)
+    return " → ".join(names)
+
+
+def _run_query(cfg, canon: str) -> dict:
+    """In-process grounded query (read-only + fast) → a chat 'answer' message."""
+    from src.agent.query import answer_query
+
+    res = answer_query(cfg, canon)
+    a = res["answer"]
+    return {
+        "role": "agent", "kind": "answer", "tools": _tools_line(canon),
+        "en": a.get("answer_en", ""), "zh": a.get("answer_zh", ""),
+        "citations": a.get("citations", []), "grounded": res.get("grounded", False),
+        "trace": Path(res.get("trace_path", "")).name,
+    }
+
+
+def _greeting_msg() -> dict:
+    return {"role": "agent", "kind": "text",
+            "en": T["English"]["greeting"], "zh": T["中文"]["greeting"]}
+
+
+def _showcase_msg() -> dict:
+    """A grounded example result on the landing screen (never an empty box).
+    Computed from the predictions artifact — reporting voice, no LLM."""
+    import pandas as pd
+
+    try:
+        preds = pd.read_csv(be.PRED_PATH)
+        high = preds[preds["risk_band"] == "high"].sort_values("pred_rul")
+        first = high[high["pred_rul"] <= 10]
+        if first.empty:
+            first = high.head(3)
+        ids = ", ".join(str(int(u)) for u in first["unit_id"].head(3))
+        return {"role": "agent", "kind": "showcase",
+                "n": int(len(high)), "ids": ids, "cap": 10}
+    except (OSError, ValueError, KeyError):
+        return {"role": "agent", "kind": "howitworks"}
+
+
+def _handle_user_intent(st, cfg, tt, display_text, intent_text=None,
+                        running=False) -> None:
+    intent_text = intent_text if intent_text is not None else display_text
+    st.session_state["chat"].append({"role": "user", "text": display_text})
+    kind, payload = _detect_intent(intent_text)
+    if kind == "howitworks":
+        st.session_state["chat"].append({"role": "agent", "kind": "howitworks"})
+    elif kind == "run":
+        if running:  # a run is in flight — queue, never launch concurrently
+            st.session_state["chat"].append({"role": "agent", "kind": "text",
+                "en": T["English"]["queued_run"], "zh": T["中文"]["queued_run"]})
+        else:
+            st.session_state["chat"].append({"role": "agent", "kind": "plan"})
+            st.session_state["awaiting_start"] = True
+    elif kind == "query":
+        # read-only: answerable immediately from existing artifacts, even mid-run.
+        st.session_state["chat"].append(_run_query(cfg, payload))
+    else:
+        st.session_state["chat"].append({"role": "agent", "kind": "fallback"})
+
+
+def _render_chat_msg(st, msg, tt, lang) -> None:
+    en = lang == "English"
+    with st.chat_message("user" if msg["role"] == "user" else "assistant"):
+        kind = msg.get("kind")
+        if msg["role"] == "user":
+            st.markdown(msg["text"])
+        elif kind in ("text", "note"):
+            st.markdown(msg["en"] if en else msg["zh"])
+        elif kind == "done":
+            st.markdown(msg["en"] if en else msg["zh"])
+            st.caption(tt["chat_done_note"])
+        elif kind == "resolved_card":
+            st.success(msg["en"] if en else msg["zh"])
+        elif kind == "howitworks":
+            st.markdown(tt["howitworks"])
+        elif kind == "showcase":
+            st.markdown(tt["showcase"].format(n=msg["n"], ids=msg["ids"], cap=msg["cap"]))
+            st.caption(f"📄 {tt['showcase_src']}")
+        elif kind == "fallback":
+            st.markdown(tt["chat_fallback"])
+        elif kind == "plan":
+            st.markdown(tt["plan_preview"])
+        elif kind == "answer":
+            st.caption(f"{tt['chat_tools_label']}: {msg['tools']}")
+            st.markdown(msg["en"] if en else msg["zh"])
+            lines = []
+            for c in msg.get("citations") or []:
+                if c.get("source_file"):
+                    lines.append(f"`{c['source_file']}` › {c.get('section')}")
+                elif c.get("artifact"):
+                    lines.append(f"`{c['artifact']}` — {c.get('note', '')}")
+            if lines:
+                st.caption(f"{tt['chat_citations']}: " + "; ".join(lines))
+            if msg.get("trace"):
+                mark = "✓ " if msg.get("grounded") else ""
+                st.caption(f"{mark}{tt['chat_grounded']}: `{msg['trace']}`")
+
+
+def _latest_run_rows(cfg):
+    """Per-stage rows for the latest journal run: (idx, stage, skipped, done, gate,
+    artifacts). Returns (run_id, rows) or (None, [])."""
+    events = read_events(_state_dir(cfg) / "autopilot_journal.jsonl")
+    if not events:
+        return None, []
+    last = events[-1].get("run_id")
+    ev = [e for e in events if e.get("run_id") == last]
+    rows = []
+    for idx, stage in enumerate(STAGE_ORDER, 1):
+        sev = [e for e in ev if e.get("stage") == stage]
+        if not any(e["type"] == "stage_started" for e in sev):
+            continue
+        done = next((e for e in sev if e["type"] == "stage_done"), None)
+        gate = [e for e in sev if e["type"] == "gate_raised"]
+        arts = [e for e in sev if e["type"] == "artifact"]
+        rows.append((idx, stage, bool(done and done.get("skipped")), done, gate, arts))
+    return last, rows
+
+
+def _render_progress_bubble(st, cfg, tt, lang, running) -> None:
+    """BUBBLE ECONOMY: stage progress lives in ONE bubble. While running it shows
+    the current stage; when finished it collapses to a '✓ Done · view steps'
+    expander whose CONTENT is the per-node reports (numbers + citations). Cached
+    stages compress to a single 'N steps reused cache' line. No 'typing…' fakery."""
+    last, rows = _latest_run_rows(cfg)
+    if not rows:
+        return
+    n_cached = sum(1 for r in rows if r[2] and not r[4])
+
+    if running:
+        with st.chat_message("assistant"):
+            cur = rows[-1][1].split("_", 1)[1]
+            st.markdown(f"⏳ {tt['run_progress_running'].format(stage=cur)}")
+            if n_cached:
+                st.caption(tt["run_cache_reuse"].format(n=n_cached))
+        return
+
+    with st.chat_message("assistant"):
+        with st.expander(tt["run_done_expander"], expanded=False):
+            st.caption(f"`{last}`")
+            if n_cached:
+                st.markdown(f"⏭️ {tt['run_cache_reuse'].format(n=n_cached)}")
+            for idx, stage, skipped, done, gate, arts in rows:
+                if skipped and not gate:
+                    continue  # compressed into the cache line above
+                spec = STAGE_SPECS[stage]
+                what = spec.what if lang == "English" else spec.zh_what
+                secs = done.get("seconds", 0) if done else 0
+                extra = f", {done.get('rows')} rows" if done and done.get("rows") else ""
+                st.markdown(f"**{_circled(idx)} {what}** — `{secs}s`{extra}")
+                for a in arts:
+                    km = a.get("key_metrics") or {}
+                    st.caption(f"📦 {a.get('path')}" + (f"  {km}" if km else ""))
+                for g in gate:
+                    st.caption(f"⚠️ decision raised: {g.get('kind')}")
+
+
+def _render_failure(st, cfg, tt, lang) -> None:
+    """FAILURE TURN: name the step, state nothing changed, offer Retry + details.
+    No red ERROR wall (uses a warning, stack detail behind an expander)."""
+    events = read_events(_state_dir(cfg) / "autopilot_journal.jsonl")
+    last = events[-1].get("run_id") if events else None
+    halted = next((e for e in events
+                   if e.get("run_id") == last and e["type"] == "halt"), None)
+    if not halted:
+        return
+    with st.chat_message("assistant"):
+        st.warning(tt["fail_step"].format(stage=halted.get("stage")))
+        if st.button(tt["fail_retry"], key="chat_retry"):
+            st.session_state.ap_proc = _launch(cfg, "gated")
+            st.rerun()
+        with st.expander(tt["fail_details"]):
+            st.code(f"{halted.get('reason')}\n{halted.get('detail')}")
+
+
+def _uncertainty_index(card) -> int:
+    """Index of the uncertainty/optimism caveat signal (always kept visible)."""
+    sigs = card.get("signals", [])
+    for i, s in enumerate(sigs):
+        if str(s.get("field", "")).endswith("rmse") or "±" in s.get("text_en", ""):
+            return i
+    return len(sigs) - 1 if sigs else -1
+
+
+def _render_active_card(st, card, cfg, tt, lang) -> None:
+    """A pinned, unanswered decision card: verdict + always-visible uncertainty;
+    other signals behind a 'why?' expander; actions morph the card on press."""
+    en = lang == "English"
+    with st.chat_message("assistant"):
+        prio = card.get("priority", "P3")
+        verdict = card["verdict_en"] if en else card["verdict_zh"]
+        {"P1": st.error, "P2": st.warning}.get(prio, st.info)(
+            f"**{prio} · {card.get('kind')}** — {verdict}")
+        st.caption(card["verdict_zh"] if en else card["verdict_en"])
+
+        sigs = card.get("signals", [])
+        ui = _uncertainty_index(card)
+        if 0 <= ui < len(sigs):
+            s = sigs[ui]
+            st.markdown(f"⚠️ {s['text_en'] if en else s['text_zh']}")
+        others = [s for i, s in enumerate(sigs) if i != ui]
+        if others:
+            with st.expander(tt["why_expander"]):
+                for s in others:
+                    st.markdown(f"- {s['text_en'] if en else s['text_zh']}")
+                    st.caption(f"{tt['card_grounded']}: `{s.get('artifact')}` [{s.get('field')}]")
+
+        m = re.search(r"unit_(\d+)", str(card.get("evidence_link", "")))
+        if m:
+            uid = int(m.group(1))
+            if st.button(tt["card_evidence_btn"].format(u=uid), key=f"chatev_{card['id']}"):
+                st.session_state["app_mode"] = MODE_TEACH
+                st.session_state["engine_select"] = uid
+                st.session_state["stage"] = 4
+                st.session_state["stage_unit"] = uid
+                st.rerun()
+
+        actions = card.get("actions", [])
+        cols = st.columns(len(actions)) if actions else []
+        for col, a in zip(cols, actions):
+            label = (a["label_en"] if en else a["label_zh"]) + (
+                " ✅" if a.get("safe_default") else "")
+            if col.button(label, key=f"chatact_{card['id']}_{a['id']}"):
+                _answer_card(cfg, card["id"], a["id"])
+                # The card MORPHS to a resolved milestone — no praise echo bubble.
+                st.session_state.setdefault("answered_cards", {})[card["id"]] = a["id"]
+                st.session_state["chat"].append({
+                    "role": "agent", "kind": "resolved_card",
+                    "en": T["English"]["chat_resolved"].format(act=a["label_en"]),
+                    "zh": T["中文"]["chat_resolved"].format(act=a["label_zh"]),
+                })
+                st.session_state.ap_proc = _launch(cfg, "gated")
+                st.rerun()
+            col.caption(a["consequence_en"] if en else a["consequence_zh"])
+
+
+def _maybe_append_done(st, cfg) -> None:
+    """Append the done-state summary bubble once per completed run."""
+    events = read_events(_state_dir(cfg) / "autopilot_journal.jsonl")
+    if not events:
+        return
+    last = events[-1].get("run_id")
+    if st.session_state.get("summary_done_for") == last:
+        return
+    import pandas as pd
+
+    preds = pd.read_csv(be.PRED_PATH)
+    n, h = int(len(preds)), int((preds["risk_band"] == "high").sum())
+    d = len(list((_state_dir(cfg) / "autopilot_inbox" / "pending").glob("*.json")))
+    st.session_state["chat"].append({
+        "role": "agent", "kind": "done",
+        "en": T["English"]["done_banner"].format(n=n, h=h, d=d),
+        "zh": T["中文"]["done_banner"].format(n=n, h=h, d=d),
+    })
+    st.session_state["summary_done_for"] = last
+
+
+def _active_cards(st, cfg):
+    """Unanswered pending cards (answered ones have morphed into history)."""
+    answered = st.session_state.get("answered_cards", {})
+    out = []
+    if st.session_state.get("chat_run_active"):
+        for pf in sorted((_state_dir(cfg) / "autopilot_inbox" / "pending").glob("*.json")):
+            card = _read_json(pf)
+            if card and card["id"] not in answered:
+                out.append(card)
+    return out
+
+
+def _chat_mode(st, plt, pd, cfg, tt, lang, pv) -> None:
+    # Persistent trust badge + capability opener (reporting voice, no persona).
+    st.caption(f"🔒 **{tt['chat_badge']}**")
+    st.markdown(f"#### {tt['chat_intro']}")
+    st.info(tt["ap_naming"], icon="🤖")
+
+    if st.sidebar.button(tt["chat_reset"], key="chat_reset_btn"):
+        for k in ("chat", "awaiting_start", "chat_run_active", "ap_proc",
+                  "summary_done_for", "answered_cards", "ap_skip"):
+            st.session_state.pop(k, None)
+    # Landing never shows an empty box: greeting + a grounded example.
+    if not st.session_state.get("chat"):
+        st.session_state["chat"] = [_greeting_msg(), _showcase_msg()]
+
+    for msg in st.session_state["chat"]:
+        _render_chat_msg(st, msg, tt, lang)
+
+    proc = st.session_state.get("ap_proc")
+    skip = st.session_state.pop("ap_skip", False)
+    running = proc is not None and proc.poll() is None and not skip
+
+    # ONE rewriting progress bubble + honest failure turn.
+    if st.session_state.get("chat_run_active"):
+        _render_progress_bubble(st, cfg, tt, lang, running)
+        _render_failure(st, cfg, tt, lang)
+
+    if proc is not None and not running:
+        st.session_state.ap_proc = None
+        _maybe_append_done(st, cfg)
+
+    active = _active_cards(st, cfg)
+
+    # Action row: a pending decision takes precedence over chips (decision focus).
+    if active:
+        st.caption(f"📌 {tt['decision_pending'].format(n=len(active))}")
+        for card in active:
+            _render_active_card(st, card, cfg, tt, lang)
+    elif not running and st.session_state.get("awaiting_start"):
+        c1, c2 = st.columns(2)
+        if c1.button(tt["chat_btn_start"], key="chat_start"):
+            st.session_state["awaiting_start"] = False
+            st.session_state["chat_run_active"] = True
+            st.session_state.ap_proc = _launch(cfg, "gated")
+            st.rerun()
+        if c2.button(tt["chat_btn_dry"], key="chat_dry"):
+            st.session_state["awaiting_start"] = False
+            st.session_state["chat_run_active"] = True
+            st.session_state.ap_proc = _launch(cfg, "dry-run")
+            st.rerun()
+    elif not running:
+        cols = st.columns(len(CHIPS))
+        for col, (key, canon) in zip(cols, CHIPS):
+            if col.button(tt[key], key=f"chip_{key}", width="stretch"):
+                _handle_user_intent(st, cfg, tt, tt[key], canon)
+                st.rerun()
+
+    if running:  # anti-conversation-tax: jump straight to results
+        if st.button(tt["skip_results"], key="chat_skip"):
+            st.session_state["ap_skip"] = True
+            st.rerun()
+
+    prompt = st.chat_input(tt["chat_input_ph"])
+    if prompt:
+        _handle_user_intent(st, cfg, tt, prompt, running=running)
+        st.rerun()
+
+    if running:
+        time.sleep(1.0)
+        st.rerun()
+
+
+# =============================================================================
 # Dispatcher
 # =============================================================================
 def _run() -> None:
@@ -1145,15 +1653,18 @@ def _run() -> None:
     st.warning(tt["limitations"], icon="⚠️")
 
     if "app_mode" not in st.session_state:
-        st.session_state["app_mode"] = MODE_AUTO
+        st.session_state["app_mode"] = MODE_CHAT
     mode = st.radio(
-        tt["mode_label"], [MODE_AUTO, MODE_TEACH], key="app_mode", horizontal=True
+        tt["mode_label"], [MODE_CHAT, MODE_DASH, MODE_TEACH],
+        key="app_mode", horizontal=True,
     )
 
     if mode == MODE_TEACH:
         _teaching_mode(st, plt, pd, cfg, tt, lang, pv)
-    else:
+    elif mode == MODE_DASH:
         _autopilot_page(st, plt, pd, cfg, tt, lang, pv)
+    else:
+        _chat_mode(st, plt, pd, cfg, tt, lang, pv)
 
 
 if __name__ == "__main__":
