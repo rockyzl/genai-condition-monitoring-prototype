@@ -7,7 +7,7 @@ sdk: docker
 app_port: 8501
 pinned: false
 suggested_hardware: cpu-basic
-short_description: Deterministic RUL pipeline + HITL decision agent on NASA C-MAPSS
+short_description: Deterministic RUL pipeline + HITL decision agent demo
 ---
 
 # Condition Monitoring Agent — live demo
