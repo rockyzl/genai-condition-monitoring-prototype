@@ -23,9 +23,12 @@ cross-asset or cross-domain evaluation.
 ## Baseline Model, Not State of the Art
 
 The RUL model is a straightforward baseline chosen for transparency, not a
-tuned or state-of-the-art architecture. No deep sequence models, no
-hyperparameter search beyond the essentials, no ensembling. The goal is a
-credible, explainable reference point — not the lowest possible error.
+tuned or state-of-the-art architecture. The model-selection bake-off compares
+only a small classical set (Ridge floor, RandomForest, HistGradientBoosting)
+under grouped cross-validation; there are no deep sequence models and no
+extensive hyperparameter search. The champion is a self-explaining ensemble of
+trees, deliberately kept simple. The goal is a credible, explainable reference
+point — not the lowest possible error.
 
 ## Lexical Retrieval, Not Dense Embeddings
 
@@ -43,6 +46,28 @@ removes any risk of hallucinated root-cause claims. The trade-off is less
 fluent, less flexible prose. Swapping in an LLM is a natural next step but is
 out of scope here.
 
+## Rule-Based Agent and Threshold Gates — No LLM (By Design)
+
+The pipeline agent is a **rule-based** supervisor and planner, not a generative
+one. Its intent parsing, stage orchestration, and validation gates are
+deterministic and threshold-based: gates fire on fixed, config-declared
+conditions (schema checks, a leakage canary, the champion-beats-floor bound,
+risk-distribution bounds), and those thresholds are hashed into the trace so
+they cannot be silently weakened. This is a deliberate choice — reproducible and
+auditable over flexible — and its limits are the flip side: the agent handles
+only the intents and failure conditions it was written for, and cannot reason
+about situations outside its rules. An LLM planner exists only as a
+default-off, not-configured interface stub. There is no LLM in the loop.
+
+## Decision Cards Are Advisory Only
+
+Every decision card the agent raises is advisory decision support, not an
+action. Card actions produce drafts and views only — "Export = draft work
+orders only, never commands" — and triage and sign-off cards never auto-pass; a
+human must answer them. The agent does not close any loop, dispatch
+maintenance, or mark an engine safe. All governance rests on human review — see
+`knowledge_base/human_in_loop_policy.md`.
+
 ## No Drift or Live Monitoring
 
 The prototype is a static, batch demonstration. There is no data-drift
@@ -53,5 +78,5 @@ no alerting, and no streaming ingestion.
 
 This is an independent R&D prototype, not a production system. It is not
 hardened, not load-tested, not integrated with any asset, and makes no
-safety-critical or autonomous decisions. All outputs are advisory and require
+safety-critical or unattended decisions. All outputs are advisory and require
 human review — see `knowledge_base/human_in_loop_policy.md`.

@@ -32,6 +32,20 @@ do not invent numbers. Every bullet must remain accurate once the numbers land.
   transferable predictive-analytics and responsible-AI capability without
   proprietary or production data.
 
+- Built a deterministic pipeline agent that walks a 10-stage RUL analysis
+  end-to-end with human-in-the-loop decision gates: each stage emits a
+  provenance-stamped step to an append-only journal and the run condenses into
+  at most five grounded, cited decision cards (triage and sign-off cards never
+  auto-pass), backed by an audit trace linking every recommendation to its
+  evidence and a two-run byte-identical determinism test.
+
+- Ran a model-selection bake-off under unit-grouped 5-fold cross-validation
+  with calibration-aware, end-of-life-weighted criteria: a Ridge floor
+  (21.0 CV-RMSE), a RandomForest champion (18.2 ± 0.5 CV-RMSE, 2.8 cycles
+  better than the linear floor), and a gradient-boosting challenger rejected
+  for failing a clear-win bar — preserving determinism and the fixed downstream
+  prediction contract.
+
 ## Placeholder Key (for the lead)
 
 | Placeholder | Filled value (2026-07-06) | Source |

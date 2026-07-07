@@ -42,6 +42,22 @@ Automated evaluation of the GenAI-assisted condition-monitoring prototype. Indep
 
 **No violations.** Every diagnostic report cited evidence, carried uncertainty, forced human review, echoed the predicted RUL, and grounded every failure-mode and next-step claim in a retrieved knowledge-base chunk (no invented root causes).
 
+## Section D — Autonomy governance
+
+Governs the latest **agent** run (autopilot/query) — the checks that keep the deterministic pipeline agent accountable, evaluated over real run artifacts (trace, journal, decision inbox, run state).
+
+- Latest agent run: `auto_20260706T235818124979Z`  ·  autonomy: **gated**
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| Recommendation → tool-output grounding | ✅ PASS | 4/4 claims in `agent_trace_ask_20260706T235820674489Z.json` re-derive from a live tool output |
+| Card signal → artifact reproducibility | ✅ PASS | 9/9 signals across 3 card(s) re-derive from their artifact+field |
+| No unrecorded stage skips | ✅ PASS | 10/10 stages accounted for in run state + provenance |
+| Gate outcomes journalled + consistent | ✅ PASS | 2 raised / 1 resolved / 0 halt event(s) consistent with run state |
+| Gate-threshold hash unchanged (anti-silent-weakening) | ✅ PASS | trace hash 67943e2d5b7d3853 matches current config |
+
+**All autonomy-governance checks passed** over the latest agent run: every recommendation maps to a tool output, every card signal re-derives from its artifact, no stage skipped without a state+provenance record, all gate outcomes are journalled, and the trace's gate-threshold hash matches the current config (anti-silent-weakening).
+
 ## Commentary
 
 The baseline RUL model lands at RMSE 18.188 / MAE 13.141 cycles (vs uncapped truth) on the FD001 test units. That is a credible baseline for a simple model on capped RUL targets, not a tuned state-of-the-art result — error concentrates near end-of-life, which is exactly why the assistant foregrounds uncertainty and human review. Our independent recomputation from the prediction file matches the DS uncapped metrics exactly, confirming the artifact is consistent.
@@ -49,3 +65,5 @@ The baseline RUL model lands at RMSE 18.188 / MAE 13.141 cycles (vs uncapped tru
 Retrieval hit@4 is 1.0 across 10 hand-written queries — the TF-IDF index reliably surfaces the intended knowledge-base file. Misses, if any, reflect lexical overlap between sections (e.g. checklist vs. policy) rather than retrieval failure.
 
 The governance checks are the point of this project: they enforce that no diagnostic ships without citations, uncertainty, a human-review flag, and claims traceable to retrieved evidence. All records passed.
+
+Section D governs the agent itself: over the latest run, every recommendation traced to a tool output, every decision-card signal re-derived from its source artifact, no stage skipped without a state+provenance record, all gate outcomes were journalled, and the recorded gate-threshold hash still matches the live config — so the agent's autonomy stayed inside its declared, auditable bounds.

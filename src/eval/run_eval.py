@@ -254,6 +254,270 @@ def eval_diagnostics(
 
 
 # =========================================================================
+# Section D - autonomy governance (Phase E)
+# =========================================================================
+# Turns the Phase-C agent test assertions into evaluation-report checks over the
+# LATEST real agent-run artifacts under reports/ (newest ask/auto trace, the
+# autopilot journal, the decision inbox, and the run state). Reuses the exact
+# grounding predicates the agent ships — Trace.claim_is_grounded and
+# cards.signal_grounded — so the report cannot silently diverge from the code.
+# Degrades to a clear "no agent run found" pending note when nothing is present.
+
+AGENT_REPORTS_DIR = REPORTS_DIR
+
+
+def _newest(reports_dir: Path, pattern: str) -> Path | None:
+    matches = sorted(reports_dir.glob(pattern), key=lambda p: p.stat().st_mtime)
+    return matches[-1] if matches else None
+
+
+def _load_json(path: Path | None) -> dict | None:
+    if path is None or not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except (ValueError, OSError):
+        return None
+
+
+def _reground_claims(cfg, trace_dict: dict) -> tuple[int, int]:
+    """Re-execute the trace's (read-only) tool calls and re-verify each claim.
+
+    Reuses ``Trace.claim_is_grounded`` verbatim: it rebuilds the tool outputs by
+    re-calling the recorded tools against the *current* artifacts, so every claim
+    is checked to still map to a live tool output (never trusting the trace's own
+    self-reported flag). ``run_stage`` records are not re-executed (they would
+    re-run pipeline stages); query traces never contain them.
+    """
+    from src.agent.registry import Registry, ToolResult
+    from src.agent.trace import Trace
+
+    reg = Registry(cfg)
+    t = Trace(run_id=trace_dict.get("run_id", "?"), kind=trace_dict.get("kind", "query"))
+    for rec in trace_dict.get("tool_calls", []):
+        if rec.get("tool") == "run_stage":
+            t.record_tool(
+                ToolResult(tool="run_stage", args=rec.get("args", {}), ok=False,
+                           error="not re-executed (stage run)")
+            )
+            continue
+        t.record_tool(reg.call(rec["tool"], rec.get("args", {})))
+    for c in trace_dict.get("claims", []):
+        t.add_claim(c["text_en"], c["source_seq"], c["tool"], c["field"], c["value"])
+    total = len(t.claims)
+    ok = sum(1 for cl in t.claims if t.claim_is_grounded(cl))
+    return total, ok
+
+
+def _card_signals_ok(cfg, cards: list[dict]) -> tuple[int, int]:
+    """Count how many card signals re-derive from their artifact+field."""
+    from src.agent.cards import Signal, signal_grounded
+
+    total = ok = 0
+    for card in cards:
+        for sig in card.get("signals", []):
+            total += 1
+            s = Signal(
+                text_en=sig.get("text_en", ""),
+                text_zh=sig.get("text_zh", ""),
+                artifact=sig["artifact"],
+                field=sig["field"],
+            )
+            if signal_grounded(cfg, s):
+                ok += 1
+    return total, ok
+
+
+def eval_autonomy_governance(reports_dir: Path = AGENT_REPORTS_DIR, cfg=None) -> dict:
+    """Section D: govern the latest agent run against five reproducible checks."""
+    from src.pipeline.config import PipelineConfig
+    from src.pipeline.journal import events_for_run, read_events
+
+    cfg = cfg or PipelineConfig.load()
+
+    auto_trace_path = _newest(reports_dir, "agent_trace_auto_*.json")
+    ask_trace_path = _newest(reports_dir, "agent_trace_ask_*.json")
+    auto_trace = _load_json(auto_trace_path)
+    ask_trace = _load_json(ask_trace_path)
+    state = _load_json(reports_dir / "autopilot_state.json")
+    journal_path = reports_dir / "autopilot_journal.jsonl"
+
+    if auto_trace is None and ask_trace is None and state is None:
+        return {
+            "status": "pending",
+            "reason": (
+                "no agent run found under reports/ (no agent_trace_*.json / "
+                "autopilot_state.json). Run `python -m src.agent run --all` or "
+                "`python -m src.agent ask \"...\"` first."
+            ),
+            "checks": [],
+        }
+
+    checks: list[dict] = []
+
+    # --- Check 1: every ask-trace claim maps to a tool output ----------------
+    if ask_trace and ask_trace.get("claims"):
+        total, ok = _reground_claims(cfg, ask_trace)
+        checks.append({
+            "name": "Recommendation → tool-output grounding",
+            "status": "pass" if ok == total and total > 0 else "fail",
+            "detail": f"{ok}/{total} claims in `{ask_trace_path.name}` re-derive "
+            "from a live tool output",
+            "n_total": total, "n_ok": ok,
+        })
+    else:
+        checks.append({
+            "name": "Recommendation → tool-output grounding",
+            "status": "skip",
+            "detail": "no query (ask) trace with claims found", "n_total": 0, "n_ok": 0,
+        })
+
+    # --- Check 2: every card signal re-derives from its artifact+field -------
+    cards: list[dict] = []
+    if auto_trace:
+        cards += [c for c in auto_trace.get("cards", []) if c.get("signals")]
+    for p in sorted((reports_dir / "autopilot_inbox" / "pending").glob("*.json")):
+        cd = _load_json(p)
+        if cd and cd.get("signals"):
+            cards.append(cd)
+    if cards:
+        total, ok = _card_signals_ok(cfg, cards)
+        checks.append({
+            "name": "Card signal → artifact reproducibility",
+            "status": "pass" if ok == total and total > 0 else "fail",
+            "detail": f"{ok}/{total} signals across {len(cards)} card(s) re-derive "
+            "from their artifact+field",
+            "n_total": total, "n_ok": ok,
+        })
+    else:
+        checks.append({
+            "name": "Card signal → artifact reproducibility",
+            "status": "skip", "detail": "no cards found", "n_total": 0, "n_ok": 0,
+        })
+
+    # --- Check 3: no stage skipped without a state + provenance record -------
+    if auto_trace and state:
+        decided = {d[0] for d in state.get("decisions", [])}
+        # Provenance sidecars live next to the stage artifacts under the repo root
+        # (never under a test's tmp reports dir), so read them via the config paths.
+        prov_stages = set()
+        prov_dirs = [
+            cfg.path("data_processed"), cfg.path("reports"), cfg.path("models"),
+            cfg.path("figures"), cfg.path("eda"), cfg.path("evidence"),
+            cfg.path("diagnostics"),
+        ]
+        for d in prov_dirs:
+            if not d.exists():
+                continue
+            for pp in d.glob("**/*.prov.json"):
+                rec = _load_json(pp)
+                if rec and rec.get("stage"):
+                    prov_stages.add(rec["stage"])
+        stage_recs = [
+            r for r in auto_trace.get("tool_calls", []) if r.get("tool") == "run_stage"
+        ]
+        total = len(stage_recs)
+        ok = 0
+        offenders = []
+        for r in stage_recs:
+            prev = r.get("output_preview") or {}
+            stage = prev.get("stage") or r.get("args", {}).get("stage")
+            skipped = prev.get("skipped", False)
+            recorded = stage in decided
+            provd = (not skipped) or (stage in prov_stages)
+            if recorded and provd:
+                ok += 1
+            else:
+                offenders.append(stage)
+        checks.append({
+            "name": "No unrecorded stage skips",
+            "status": "pass" if ok == total and total > 0 else "fail",
+            "detail": f"{ok}/{total} stages accounted for in run state + provenance"
+            + (f"; unaccounted: {offenders}" if offenders else ""),
+            "n_total": total, "n_ok": ok,
+        })
+    else:
+        checks.append({
+            "name": "No unrecorded stage skips", "status": "skip",
+            "detail": "no autopilot trace + state pair found", "n_total": 0, "n_ok": 0,
+        })
+
+    # --- Check 4: gate outcomes journalled + consistent with state ----------
+    if state and journal_path.exists():
+        run_id = state.get("run_id")
+        events = events_for_run(journal_path, run_id) if run_id else read_events(journal_path)
+        raised = {e.get("card_id") for e in events if e.get("type") == "gate_raised"}
+        resolved = {e.get("card_id") for e in events if e.get("type") == "gate_resolved"}
+        halts = [e for e in events if e.get("type") == "halt"]
+        pending_ids = set(state.get("cards_pending", []))
+        resolved_ids = set(state.get("cards_resolved", []))
+        halt_stages = {d[0] for d in state.get("decisions", []) if d[2] == "HALT"}
+
+        problems = []
+        for cid in pending_ids | resolved_ids:
+            if cid not in raised:
+                problems.append(f"card {cid} not journalled as gate_raised")
+        for cid in resolved_ids:
+            if cid not in resolved:
+                problems.append(f"resolved card {cid} missing gate_resolved event")
+        if resolved - raised:
+            problems.append("gate_resolved without a matching gate_raised")
+        journalled_halt_stages = {e.get("stage") for e in halts}
+        for st in halt_stages:
+            if st not in journalled_halt_stages:
+                problems.append(f"HALT at {st} not journalled")
+        n_total = len(pending_ids | resolved_ids) + len(halt_stages)
+        n_ok = n_total - len(problems)
+        checks.append({
+            "name": "Gate outcomes journalled + consistent",
+            "status": "pass" if not problems else "fail",
+            "detail": (f"{len(raised)} raised / {len(resolved)} resolved / {len(halts)} halt "
+                       f"event(s) consistent with run state"
+                       if not problems else "; ".join(problems)),
+            "n_total": n_total, "n_ok": n_ok,
+        })
+    else:
+        checks.append({
+            "name": "Gate outcomes journalled + consistent", "status": "skip",
+            "detail": "no journal + state pair found", "n_total": 0, "n_ok": 0,
+        })
+
+    # --- Check 5: trace thresholds hash matches current config --------------
+    if auto_trace and auto_trace.get("thresholds_hash"):
+        from src.agent.autopilot import AgentGateConfig
+
+        current = AgentGateConfig.from_pipeline(cfg).hash()
+        recorded = auto_trace["thresholds_hash"]
+        match = current == recorded
+        checks.append({
+            "name": "Gate-threshold hash unchanged (anti-silent-weakening)",
+            "status": "pass" if match else "fail",
+            "detail": (f"trace hash {recorded} matches current config"
+                       if match else f"trace hash {recorded} != current {current} "
+                       "(gate thresholds changed since the run)"),
+            "n_total": 1, "n_ok": int(match),
+        })
+    else:
+        checks.append({
+            "name": "Gate-threshold hash unchanged (anti-silent-weakening)",
+            "status": "skip", "detail": "no autopilot trace with a thresholds hash",
+            "n_total": 0, "n_ok": 0,
+        })
+
+    n_failed = sum(1 for c in checks if c["status"] == "fail")
+    n_passed = sum(1 for c in checks if c["status"] == "pass")
+    status = "violations" if n_failed else ("ok" if n_passed else "pending")
+    return {
+        "status": status,
+        "run_id": (auto_trace or ask_trace or state or {}).get("run_id"),
+        "autonomy": (auto_trace or {}).get("autonomy") or (state or {}).get("autonomy"),
+        "checks": checks,
+        "n_failed": n_failed,
+        "n_passed": n_passed,
+    }
+
+
+# =========================================================================
 # Report writer
 # =========================================================================
 def _fmt_metrics(m: dict) -> list[str]:
@@ -356,8 +620,44 @@ def _fmt_diagnostics(d: dict) -> list[str]:
     return lines
 
 
-def write_summary(metrics: dict, retrieval: dict, diagnostics: dict) -> Path:
+def _fmt_governance(g: dict) -> list[str]:
+    if g["status"] == "pending":
+        return [f"_Pending: {g['reason']}._", ""]
+    lines = [
+        f"- Latest agent run: `{g.get('run_id') or 'n/a'}`  ·  autonomy: "
+        f"**{g.get('autonomy') or 'n/a'}**",
+        "",
+        "| Check | Result | Detail |",
+        "|-------|--------|--------|",
+    ]
+    badge = {"pass": "✅ PASS", "fail": "❌ FAIL", "skip": "— skip"}
+    for c in g["checks"]:
+        lines.append(f"| {c['name']} | {badge[c['status']]} | {c['detail']} |")
+    lines.append("")
+    if g["status"] == "violations":
+        lines.append(
+            f"**{g['n_failed']} autonomy-governance check(s) FAILED** — the agent "
+            "run above is not fully accountable; see the failing rows."
+        )
+    else:
+        lines.append(
+            "**All autonomy-governance checks passed** over the latest agent run: "
+            "every recommendation maps to a tool output, every card signal "
+            "re-derives from its artifact, no stage skipped without a "
+            "state+provenance record, all gate outcomes are journalled, and the "
+            "trace's gate-threshold hash matches the current config "
+            "(anti-silent-weakening)."
+        )
+    lines.append("")
+    return lines
+
+
+def write_summary(
+    metrics: dict, retrieval: dict, diagnostics: dict, governance: dict | None = None
+) -> Path:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    if governance is None:
+        governance = eval_autonomy_governance()
     lines: list[str] = [
         "# Evaluation Summary",
         "",
@@ -374,16 +674,25 @@ def write_summary(metrics: dict, retrieval: dict, diagnostics: dict) -> Path:
         "## C. Diagnostic-Output Governance Checks",
         "",
         *_fmt_diagnostics(diagnostics),
+        "## Section D — Autonomy governance",
+        "",
+        "Governs the latest **agent** run (autopilot/query) — the checks that keep "
+        "the deterministic pipeline agent accountable, evaluated over real run "
+        "artifacts (trace, journal, decision inbox, run state).",
+        "",
+        *_fmt_governance(governance),
         "## Commentary",
         "",
-        _commentary(metrics, retrieval, diagnostics),
+        _commentary(metrics, retrieval, diagnostics, governance),
         "",
     ]
     SUMMARY_PATH.write_text("\n".join(lines))
     return SUMMARY_PATH
 
 
-def _commentary(metrics: dict, retrieval: dict, diagnostics: dict) -> str:
+def _commentary(
+    metrics: dict, retrieval: dict, diagnostics: dict, governance: dict | None = None
+) -> str:
     parts: list[str] = []
     if metrics["status"] == "ok":
         cc = metrics.get("cross_check") or {}
@@ -433,6 +742,26 @@ def _commentary(metrics: dict, retrieval: dict, diagnostics: dict) -> str:
         parts.append(
             "Diagnostic-output checks are pending until evidence records are built."
         )
+    if governance is not None:
+        if governance["status"] == "ok":
+            parts.append(
+                "Section D governs the agent itself: over the latest run, every "
+                "recommendation traced to a tool output, every decision-card signal "
+                "re-derived from its source artifact, no stage skipped without a "
+                "state+provenance record, all gate outcomes were journalled, and the "
+                "recorded gate-threshold hash still matches the live config — so the "
+                "agent's autonomy stayed inside its declared, auditable bounds."
+            )
+        elif governance["status"] == "violations":
+            parts.append(
+                f"Section D flags {governance['n_failed']} autonomy-governance "
+                "violation(s) on the latest agent run — see the failing checks above."
+            )
+        else:
+            parts.append(
+                "Section D (autonomy governance) is pending: no agent run artifacts "
+                "were found under reports/ at eval time."
+            )
     return "\n\n".join(parts)
 
 
@@ -440,10 +769,12 @@ def main() -> int:
     metrics = eval_model_metrics()
     retrieval = eval_retrieval()
     diagnostics = eval_diagnostics()
-    path = write_summary(metrics, retrieval, diagnostics)
+    governance = eval_autonomy_governance()
+    path = write_summary(metrics, retrieval, diagnostics, governance)
     print(f"[run_eval] wrote {path}")
     print(f"[run_eval] model={metrics['status']} "
-          f"retrieval={retrieval['status']} diagnostics={diagnostics['status']}")
+          f"retrieval={retrieval['status']} diagnostics={diagnostics['status']} "
+          f"governance={governance['status']}")
     return 0
 
 
